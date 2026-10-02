@@ -7,6 +7,8 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[2]
 PRODUCTION = REPO / "inventories" / "production"
 
@@ -31,7 +33,13 @@ def inventory(tmp_path: Path, inventory_dir: Path = PRODUCTION) -> dict:
     return json.loads(result.stdout)
 
 
-def test_shape_check_survives_an_undecryptable_vault(tmp_path: Path) -> None:
+def test_shape_check_survives_an_undecryptable_vault(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # CI exports a throwaway vault password; this test must work with it set.
+    ci_password = tmp_path / "ci_password"
+    ci_password.write_text("ci-not-a-secret\n", encoding="utf-8")
+    monkeypatch.setenv("ANSIBLE_VAULT_PASSWORD_FILE", str(ci_password))
     inventory_dir = tmp_path / "inventory"
     vault = inventory_dir / "group_vars" / "all" / "vault.yml"
     vault.parent.mkdir(parents=True)
@@ -41,9 +49,13 @@ def test_shape_check_survives_an_undecryptable_vault(tmp_path: Path) -> None:
     vault.write_text("vault_edge01_ansible_host: 203.0.113.10\n", encoding="utf-8")
     real_password = tmp_path / "real_password"
     real_password.write_text("the-owners-real-password\n", encoding="utf-8")
+    # Encrypt with the "real" password only: an inherited
+    # ANSIBLE_VAULT_PASSWORD_FILE would be a second default vault id, and
+    # ansible-vault refuses to choose between them.
+    encrypt_env = {k: v for k, v in os.environ.items() if k != "ANSIBLE_VAULT_PASSWORD_FILE"}
     subprocess.run(
         ["ansible-vault", "encrypt", "--vault-password-file", str(real_password), str(vault)],
-        check=True, capture_output=True,
+        check=True, capture_output=True, env=encrypt_env,
     )
     assert inventory(tmp_path, inventory_dir)["edge"]["hosts"] == ["edge01"]
 
