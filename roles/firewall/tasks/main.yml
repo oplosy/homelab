@@ -81,9 +81,17 @@
   changed_when: false
   failed_when: firewall_cmp.rc not in [0, 1, 2]
 
+- name: Look for a revert left pending by an interrupted run
+  ansible.builtin.command: systemctl is-active --quiet secureedge-firewall-revert.timer  # noqa: command-instead-of-module
+  register: firewall_pending_revert
+  changed_when: false
+  failed_when: false
+
+# A pending revert would undo the live ruleset after this run reports
+# success, so confirm it through the guard even when nothing else changed.
 - name: Apply the new ruleset behind the lockout guard
   ansible.builtin.include_tasks: apply.yml
-  when: firewall_cmp.rc != 0
+  when: firewall_cmp.rc != 0 or firewall_pending_revert.rc == 0
 
 - name: Load the ruleset at boot (picking up the service drop-in)
   ansible.builtin.systemd_service:

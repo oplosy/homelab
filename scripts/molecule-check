@@ -17,6 +17,13 @@ molecule destroy
 molecule create
 molecule converge
 molecule idempotence
+
+# Simulate a run that was interrupted after scheduling the firewall revert
+# but before cancelling it, then rerun: the rerun must confirm and cancel it.
+ansible all -i molecule/default/inventory/hosts.yml -m ansible.builtin.command \
+  -a "systemd-run --unit=secureedge-firewall-revert --on-active=1h /bin/true" >/dev/null
+molecule converge
+
 pytest -m host --run-disruptive \
   --hosts=ansible://all \
   --ansible-inventory=molecule/default/inventory/hosts.yml "$@"
