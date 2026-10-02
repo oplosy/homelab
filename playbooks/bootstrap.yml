@@ -1,0 +1,10 @@
+---
+# First run on a fresh VPS only, as the provider's initial user:
+#   ansible-playbook playbooks/bootstrap.yml -e bootstrap_user=root
+- name: Bootstrap a fresh server
+  hosts: all
+  become: true
+  vars:
+    ansible_user: "{{ bootstrap_user }}"
+  roles:
+    - base

@@ -34,3 +34,17 @@ jobs:
         run: pytest tests/unit
       - name: Collect every check
         run: pytest --collect-only -q
+
+  molecule:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install dev tools
+        run: pip install -r requirements-dev.txt
+      - name: Converge and check the roles in containers
+        run: scripts/molecule-check

@@ -1,0 +1,9 @@
+---
+base_admin_user: atlas
+base_admin_ssh_keys:
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHrYITuP8SFkmE3hjigpmjWIc+m7R0E6EoSkRGcw9X08 secureedge-admin
+base_admin_password_hash: "{{ vault_base_admin_password_hash }}"
+
+ansible_user: "{{ base_admin_user }}"
+ansible_ssh_private_key_file: ~/.ssh/server_ed25519
+ansible_become_password: "{{ vault_base_admin_password }}"
