@@ -56,3 +56,24 @@ def test_base_rejects_bad_input(tmp_path: Path, override: dict) -> None:
     assert result.returncode != 0
     assert "Check required variables" in result.stdout
     assert "Create the admin user" not in result.stdout
+
+
+GOOD_RULE = {"name": "web", "proto": "tcp", "port": 443, "from": "any"}
+
+
+@pytest.mark.parametrize(
+    "role_vars",
+    [
+        {"firewall_ssh_from": "vpn"},
+        {"firewall_allowed": [{**GOOD_RULE, "proto": "icmp"}]},
+        {"firewall_allowed": [{**GOOD_RULE, "port": 70000}]},
+        {"firewall_allowed": [{**GOOD_RULE, "from": "lan"}]},
+        {"firewall_allowed": [{k: v for k, v in GOOD_RULE.items() if k != "name"}]},
+    ],
+    ids=["ssh-from", "proto", "port", "from", "no-name"],
+)
+def test_firewall_rejects_bad_input(tmp_path: Path, role_vars: dict) -> None:
+    result = run_role(tmp_path, "firewall", role_vars)
+    assert result.returncode != 0
+    assert "Check firewall settings" in result.stdout or "Check each allowed port" in result.stdout
+    assert "Install nftables" not in result.stdout

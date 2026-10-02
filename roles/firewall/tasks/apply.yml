@@ -1,0 +1,62 @@
+---
+- name: Look for a live ruleset to fall back to
+  ansible.builtin.stat:
+    path: /etc/nftables.d/secureedge.nft
+  register: firewall_live
+
+- name: Keep the live ruleset as the fallback
+  ansible.builtin.copy:
+    src: /etc/nftables.d/secureedge.nft
+    dest: /var/lib/secureedge/firewall/secureedge.nft.prev
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  when: firewall_live.stat.exists
+
+- name: Forget the fallback before a first install
+  ansible.builtin.file:
+    path: /var/lib/secureedge/firewall/secureedge.nft.prev
+    state: absent
+  when: not firewall_live.stat.exists
+
+- name: Clear a revert timer left by an interrupted run
+  ansible.builtin.command: systemctl stop secureedge-firewall-revert.timer secureedge-firewall-revert.service  # noqa: command-instead-of-module
+  failed_when: false
+  changed_when: false
+
+- name: Clear a failed revert unit left by an interrupted run
+  ansible.builtin.command: systemctl reset-failed secureedge-firewall-revert.service  # noqa: command-instead-of-module
+  failed_when: false
+  changed_when: false
+
+- name: Schedule the automatic revert
+  ansible.builtin.command: >-
+    systemd-run --unit=secureedge-firewall-revert
+    --on-active={{ firewall_revert_seconds }}
+    /usr/local/sbin/secureedge-firewall-revert
+  changed_when: true
+
+- name: Install the new ruleset
+  ansible.builtin.copy:
+    src: /var/lib/secureedge/firewall/secureedge.nft.candidate
+    dest: /etc/nftables.d/secureedge.nft
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Load the new ruleset
+  ansible.builtin.command: nft -f /etc/nftables.d/secureedge.nft
+  changed_when: true
+
+- name: Drop the current connection
+  ansible.builtin.meta: reset_connection
+
+- name: Prove a fresh connection still works
+  ansible.builtin.wait_for_connection:
+    timeout: 30
+
+- name: Cancel the automatic revert
+  ansible.builtin.command: systemctl stop secureedge-firewall-revert.timer  # noqa: command-instead-of-module
+  changed_when: true

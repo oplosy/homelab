@@ -1,0 +1,16 @@
+#!/bin/sh
+# Managed by SecureEdge (role firewall). Run by a one-off systemd timer when
+# a firewall change was not confirmed: restore the previous SecureEdge table,
+# or remove it entirely if there was none before.
+set -eu
+live=/etc/nftables.d/secureedge.nft
+prev=/var/lib/secureedge/firewall/secureedge.nft.prev
+
+if [ -f "$prev" ]; then
+  cp "$prev" "$live"
+  nft -f "$live"
+else
+  rm -f "$live"
+  nft delete table inet secureedge 2>/dev/null || true
+fi
+logger -t secureedge-firewall "reverted the SecureEdge firewall ruleset"

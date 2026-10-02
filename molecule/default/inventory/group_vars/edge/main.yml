@@ -1,2 +1,7 @@
 ---
 base_reboot_time: "01:00"
+firewall_allowed:
+  - name: test-any
+    proto: tcp
+    port: 8443
+    from: any

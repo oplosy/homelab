@@ -1,0 +1,93 @@
+---
+- name: Check firewall settings
+  ansible.builtin.assert:
+    that:
+      - firewall_ssh_from in ['any', 'wireguard']
+      - firewall_revert_seconds | int >= 30
+      - firewall_wireguard_interface | length > 0
+    fail_msg: "firewall_ssh_from must be any or wireguard; firewall_revert_seconds at least 30"
+    quiet: true
+
+- name: Check each allowed port
+  ansible.builtin.assert:
+    that:
+      - item.name | default('') is match('^[A-Za-z0-9_-]+$')
+      - item.proto | default('') in ['tcp', 'udp']
+      - item.port | default(0) | int >= 1
+      - item.port | default(0) | int <= 65535
+      - item.from | default('') in ['any', 'wireguard']
+    fail_msg: "each firewall_allowed entry needs name, proto tcp|udp, port 1-65535, from any|wireguard"
+    quiet: true
+  loop: "{{ firewall_allowed }}"
+  loop_control:
+    label: "{{ item.name | default('(unnamed)') }}"
+
+- name: Install nftables
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+
+- name: Create firewall directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /etc/nftables.d
+    - /etc/systemd/system/nftables.service.d
+    - /var/lib/secureedge/firewall
+
+- name: Load only the files in /etc/nftables.d, never flush the ruleset
+  ansible.builtin.copy:
+    src: nftables.conf
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Make stopping nftables delete only the SecureEdge table
+  ansible.builtin.copy:
+    src: nftables-service-secureedge.conf
+    dest: /etc/systemd/system/nftables.service.d/secureedge.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install the revert script
+  ansible.builtin.copy:
+    src: secureedge-firewall-revert
+    dest: /usr/local/sbin/secureedge-firewall-revert
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render the candidate ruleset
+  ansible.builtin.template:
+    src: secureedge.nft.j2
+    dest: /var/lib/secureedge/firewall/secureedge.nft.candidate
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Check the candidate ruleset
+  ansible.builtin.command: nft -c -f /var/lib/secureedge/firewall/secureedge.nft.candidate
+  changed_when: false
+
+- name: Compare the candidate with the live ruleset
+  ansible.builtin.command: cmp -s /var/lib/secureedge/firewall/secureedge.nft.candidate /etc/nftables.d/secureedge.nft
+  register: firewall_cmp
+  changed_when: false
+  failed_when: firewall_cmp.rc not in [0, 1, 2]
+
+- name: Apply the new ruleset behind the lockout guard
+  ansible.builtin.include_tasks: apply.yml
+  when: firewall_cmp.rc != 0
+
+- name: Load the ruleset at boot (picking up the service drop-in)
+  ansible.builtin.systemd_service:
+    name: nftables
+    daemon_reload: true
+    enabled: true
+    state: started

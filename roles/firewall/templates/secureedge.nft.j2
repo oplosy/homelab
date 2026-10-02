@@ -1,0 +1,46 @@
+#!/usr/sbin/nft -f
+# Managed by SecureEdge (role firewall). Replaces only table inet secureedge,
+# atomically, in one nft -f transaction.
+table inet secureedge
+delete table inet secureedge
+
+table inet secureedge {
+	set ssh_meter_v4 {
+		type ipv4_addr
+		flags dynamic, timeout
+		timeout 1m
+	}
+
+	set ssh_meter_v6 {
+		type ipv6_addr
+		flags dynamic, timeout
+		timeout 1m
+	}
+
+	chain input {
+		type filter hook input priority filter; policy drop;
+
+		ct state established,related accept
+		ct state invalid drop
+		iif lo accept
+
+		ip protocol icmp icmp type { destination-unreachable, time-exceeded } accept
+		ip protocol icmp icmp type echo-request limit rate 5/second accept
+		meta l4proto ipv6-icmp icmpv6 type { destination-unreachable, packet-too-big, time-exceeded, parameter-problem, nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert } accept
+		meta l4proto ipv6-icmp icmpv6 type echo-request limit rate 5/second accept
+
+{% if firewall_ssh_from == 'any' %}
+		tcp dport 22 ct state new add @ssh_meter_v4 { ip saddr limit rate over {{ firewall_ssh_rate }} burst {{ firewall_ssh_burst }} packets } drop
+		tcp dport 22 ct state new add @ssh_meter_v6 { ip6 saddr limit rate over {{ firewall_ssh_rate }} burst {{ firewall_ssh_burst }} packets } drop
+		tcp dport 22 ct state new accept comment "ssh"
+{% else %}
+		iifname "{{ firewall_wireguard_interface }}" tcp dport 22 ct state new accept comment "ssh"
+{% endif %}
+{% for rule in firewall_allowed %}
+		{% if rule.from == 'wireguard' %}iifname "{{ firewall_wireguard_interface }}" {% endif %}{{ rule.proto }} dport {{ rule.port }} accept comment "{{ rule.name }}"
+{% endfor %}
+{% if firewall_log_drops %}
+		limit rate 5/minute log prefix "secureedge-drop: "
+{% endif %}
+	}
+}
