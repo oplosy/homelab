@@ -2,13 +2,22 @@
 - name: Check required variables
   ansible.builtin.assert:
     that:
-      - base_admin_user is defined and base_admin_user | length > 0
-      - base_admin_ssh_keys is defined and base_admin_ssh_keys | length > 0
-      - base_admin_password_hash is defined and base_admin_password_hash is match('^\$6\$')
+      - base_admin_user is defined and base_admin_user is string
+      - base_admin_user is match('^[a-z_][a-z0-9_-]{0,31}$') and base_admin_user != 'root'
+      # A key list that installs no usable key would lock the owner out once
+      # AllowUsers and PermitRootLogin no take effect.
+      - base_admin_ssh_keys is defined and base_admin_ssh_keys is not string
+      - base_admin_ssh_keys is sequence and base_admin_ssh_keys | length > 0
+      - >-
+        base_admin_ssh_keys | reject('match', '^(ssh-(ed25519|rsa)|ecdsa-sha2-\S+|sk-\S+) [A-Za-z0-9+/]+={0,3}( .*)?$')
+        | list | length == 0
+      - base_admin_password_hash is defined and base_admin_password_hash is string
+      - base_admin_password_hash is match('^\$6\$[^$]+\$[./A-Za-z0-9]{86}$')
       - base_reboot_time is defined and base_reboot_time is match('^([01][0-9]|2[0-3]):[0-5][0-9]$')
     fail_msg: >-
-      base needs base_admin_user, base_admin_ssh_keys, a SHA-512
-      base_admin_password_hash ($6$...) and base_reboot_time as HH:MM in UTC
+      base needs base_admin_user (a valid name, not root), base_admin_ssh_keys
+      (a list of real public keys), a full SHA-512 base_admin_password_hash
+      ($6$salt$hash) and base_reboot_time as HH:MM in UTC
     quiet: true
 
 - name: Refresh the package index

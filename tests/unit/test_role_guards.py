@@ -14,7 +14,7 @@ REPO = Path(__file__).resolve().parents[2]
 GOOD_BASE = {
     "base_admin_user": "tester",
     "base_admin_ssh_keys": ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEafGqvI+GI+Zza496z5xacniElA//DNRwp0AOmpEv3C test"],
-    "base_admin_password_hash": "$6$salt$hash",
+    "base_admin_password_hash": "$6$moleculetestsalt$u6mAoI3C858mb8IQpZ49tMDK.TvvHhMHqGOQZpu63TI/HEKg6bZkHyfV3BszaQ94fUjohgA/fhj9GTpcePUHK/",
     "base_reboot_time": "01:00",
 }
 
@@ -48,8 +48,17 @@ def run_role(tmp_path: Path, role: str, role_vars: dict) -> subprocess.Completed
         {"base_admin_ssh_keys": []},
         {"base_admin_password_hash": "plaintext"},
         {"base_reboot_time": "25:00"},
+        {"base_admin_ssh_keys": [""]},
+        {"base_admin_ssh_keys": ["# key goes here"]},
+        {"base_admin_ssh_keys": GOOD_BASE["base_admin_ssh_keys"][0]},
+        {"base_admin_password_hash": "$6$"},
+        {"base_admin_user": "root"},
+        {"base_admin_user": "Bad User"},
     ],
-    ids=["no-user", "no-keys", "not-sha512", "bad-time"],
+    ids=[
+        "no-user", "no-keys", "not-sha512", "bad-time",
+        "blank-key", "comment-key", "keys-as-string", "empty-sha512", "root-user", "bad-user-name",
+    ],
 )
 def test_base_rejects_bad_input(tmp_path: Path, override: dict) -> None:
     result = run_role(tmp_path, "base", {**GOOD_BASE, **override})
@@ -77,3 +86,9 @@ def test_firewall_rejects_bad_input(tmp_path: Path, role_vars: dict) -> None:
     assert result.returncode != 0
     assert "Check firewall settings" in result.stdout or "Check each allowed port" in result.stdout
     assert "Install nftables" not in result.stdout
+
+
+def test_base_accepts_good_input(tmp_path: Path) -> None:
+    result = run_role(tmp_path, "base", GOOD_BASE)
+    assert "Check required variables" in result.stdout
+    assert "base needs" not in result.stdout
