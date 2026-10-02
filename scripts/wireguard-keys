@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""Create WireGuard key pairs and print vault and inventory snippets.
+
+Usage: scripts/wireguard-keys edge01 app01 pc-windows phone-android
+
+The first YAML document goes into the vault
+(ansible-vault edit inventories/production/group_vars/all/vault.yml);
+the public keys go into the matching wireguard_peers entries in
+inventories/production/group_vars/all/main.yml.
+"""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import re
+import sys
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+
+NAME = re.compile(r"^[a-z0-9-]+$")
+
+
+def keypair() -> tuple[str, str]:
+    key = X25519PrivateKey.generate()
+    private = key.private_bytes(
+        serialization.Encoding.Raw,
+        serialization.PrivateFormat.Raw,
+        serialization.NoEncryption(),
+    )
+    public = key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    return base64.b64encode(private).decode(), base64.b64encode(public).decode()
+
+
+def render(pairs: dict[str, tuple[str, str]]) -> str:
+    lines = [
+        "# Paste into: ansible-vault edit inventories/production/group_vars/all/vault.yml",
+        "vault_wireguard_private_keys:",
+    ]
+    lines += [f'  {name}: "{private}"' for name, (private, _) in pairs.items()]
+    lines += [
+        "---",
+        "# Copy each public key into its wireguard_peers entry in",
+        "# inventories/production/group_vars/all/main.yml",
+        "wireguard_public_keys:",
+    ]
+    lines += [f'  {name}: "{public}"' for name, (_, public) in pairs.items()]
+    return "\n".join(lines) + "\n"
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("names", nargs="+", help="peer names, e.g. edge01 pc-windows")
+    names = parser.parse_args(argv).names
+    bad = [name for name in names if not NAME.match(name)]
+    if bad:
+        print(f"invalid peer names (use a-z, 0-9, -): {', '.join(bad)}", file=sys.stderr)
+        return 2
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    if duplicates:
+        print(f"duplicate peer names: {', '.join(duplicates)}", file=sys.stderr)
+        return 2
+    sys.stdout.write(render({name: keypair() for name in names}))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
