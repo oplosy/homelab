@@ -1,0 +1,13 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Ansible
+*.retry
+.vault_pass
+
+# Local test targets and raw reports (only sanitized summaries are committed)
+tests/targets.yml
+reports/
