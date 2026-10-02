@@ -1,0 +1,8 @@
+---
+# Throwaway values for the Molecule containers only. Never used on real servers.
+base_admin_user: secureedge-test
+base_admin_ssh_keys:
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEafGqvI+GI+Zza496z5xacniElA//DNRwp0AOmpEv3C molecule-test-only
+# openssl passwd -6 -salt moleculetestsalt molecule-test-password
+base_admin_password_hash: "$6$moleculetestsalt$u6mAoI3C858mb8IQpZ49tMDK.TvvHhMHqGOQZpu63TI/HEKg6bZkHyfV3BszaQ94fUjohgA/fhj9GTpcePUHK/"
+base_set_hostname: false

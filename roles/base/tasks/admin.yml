@@ -1,0 +1,16 @@
+---
+- name: Create the admin user
+  ansible.builtin.user:
+    name: "{{ base_admin_user }}"
+    password: "{{ base_admin_password_hash }}"
+    groups: sudo
+    append: true
+    shell: /bin/bash
+    create_home: true
+  no_log: true
+
+- name: Install the admin user's SSH keys and remove any others
+  ansible.posix.authorized_key:
+    user: "{{ base_admin_user }}"
+    key: "{{ base_admin_ssh_keys | join('\n') }}"
+    exclusive: true

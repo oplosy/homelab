@@ -1,0 +1,15 @@
+---
+- name: Install the OpenSSH server
+  ansible.builtin.apt:
+    name: openssh-server
+    state: present
+
+- name: Harden sshd
+  ansible.builtin.template:
+    src: 10-secureedge.conf.j2
+    dest: /etc/ssh/sshd_config.d/10-secureedge.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Reload sshd

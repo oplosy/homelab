@@ -1,0 +1,6 @@
+---
+base_timezone: UTC
+base_journald_max_use: 500M
+base_sshd_max_auth_tries: 3
+base_remove_snapd: true
+base_set_hostname: true

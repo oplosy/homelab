@@ -1,0 +1,58 @@
+---
+- name: Install time zone data and chrony
+  ansible.builtin.apt:
+    name:
+      - tzdata
+      - chrony
+    state: present
+
+- name: Set the time zone
+  ansible.builtin.file:
+    src: "/usr/share/zoneinfo/{{ base_timezone }}"
+    dest: /etc/localtime
+    state: link
+    force: true
+
+- name: Record the time zone name
+  ansible.builtin.copy:
+    dest: /etc/timezone
+    content: "{{ base_timezone }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Keep chrony enabled
+  ansible.builtin.systemd_service:
+    name: chrony
+    enabled: true
+
+- name: Start chrony (its unit never runs inside containers)
+  ansible.builtin.systemd_service:
+    name: chrony
+    state: started
+  when: ansible_virtualization_type not in ['docker', 'container', 'podman', 'lxc']
+
+- name: Create the journald drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Cap the journal size
+  ansible.builtin.copy:
+    dest: /etc/systemd/journald.conf.d/10-secureedge.conf
+    content: |
+      # Managed by SecureEdge (role base)
+      [Journal]
+      SystemMaxUse={{ base_journald_max_use }}
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart journald
+
+- name: Set the hostname
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+  when: base_set_hostname

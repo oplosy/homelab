@@ -1,0 +1,9 @@
+# Managed by SecureEdge (role base). Loaded before 50-cloud-init.conf;
+# sshd keeps the first value it reads for each setting.
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+AllowUsers {{ base_admin_user }}
+MaxAuthTries {{ base_sshd_max_auth_tries }}
+X11Forwarding no

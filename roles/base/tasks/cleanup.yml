@@ -1,0 +1,21 @@
+---
+- name: Gather installed packages
+  ansible.builtin.package_facts:
+
+- name: Turn ufw off before removing it
+  ansible.builtin.command: ufw disable
+  when: "'ufw' in ansible_facts.packages"
+  changed_when: true
+
+- name: Remove ufw
+  ansible.builtin.apt:
+    name: ufw
+    state: absent
+    purge: true
+
+- name: Remove snapd
+  ansible.builtin.apt:
+    name: snapd
+    state: absent
+    purge: true
+  when: base_remove_snapd

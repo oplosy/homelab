@@ -1,0 +1,5 @@
+// Managed by SecureEdge (role base). Origins stay Ubuntu's defaults
+// (security pockets only).
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-Time "{{ base_reboot_time }}";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";

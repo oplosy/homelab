@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Build the Molecule containers, converge site.yml, check idempotence, run
+# the host checks against them, and always destroy the containers.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+export ANSIBLE_CONFIG="$PWD/ansible.cfg"
+if [ -z "${ANSIBLE_VAULT_PASSWORD_FILE:-}" ] && [ ! -f "$HOME/.config/secureedge/vault_pass" ]; then
+  dummy="$(mktemp)"
+  printf 'molecule-not-a-secret\n' > "$dummy"
+  export ANSIBLE_VAULT_PASSWORD_FILE="$dummy"
+fi
+
+ansible-galaxy collection install -r requirements.yml >/dev/null
+trap 'molecule destroy' EXIT
+molecule destroy
+molecule create
+molecule converge
+molecule idempotence
+pytest -m host --run-disruptive \
+  --hosts=ansible://all \
+  --ansible-inventory=molecule/default/inventory/hosts.yml "$@"

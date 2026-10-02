@@ -1,0 +1,51 @@
+---
+dependency:
+  name: galaxy
+  enabled: false
+driver:
+  name: docker
+platforms:
+  - name: edge01
+    hostname: edge01
+    image: secureedge-molecule-ubuntu:26.04
+    dockerfile: Dockerfile
+    pre_build_image: false
+    command: /sbin/init
+    cgroupns_mode: host
+    capabilities:
+      - NET_ADMIN
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+    groups:
+      - edge
+  - name: app01
+    hostname: app01
+    image: secureedge-molecule-ubuntu:26.04
+    dockerfile: Dockerfile
+    pre_build_image: false
+    command: /sbin/init
+    cgroupns_mode: host
+    capabilities:
+      - NET_ADMIN
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+    groups:
+      - app
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: ${MOLECULE_PROJECT_DIRECTORY}/roles
+  inventory:
+    links:
+      hosts: inventory/hosts.yml
+      group_vars: inventory/group_vars/
+  playbooks:
+    converge: converge.yml
+verifier:
+  name: ansible

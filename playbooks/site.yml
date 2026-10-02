@@ -1,0 +1,6 @@
+---
+- name: Edge servers
+  ansible.builtin.import_playbook: edge.yml
+
+- name: App servers
+  ansible.builtin.import_playbook: app.yml

@@ -1,0 +1,6 @@
+---
+- name: Configure edge servers
+  hosts: edge
+  become: true
+  roles:
+    - base
