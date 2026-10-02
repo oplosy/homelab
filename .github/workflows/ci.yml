@@ -22,6 +22,8 @@ jobs:
           cache-dependency-path: requirements-dev.txt
       - name: Install dev tools
         run: pip install -r requirements-dev.txt
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r requirements.yml
       - name: Use a throwaway vault password (CI never has the real one)
         run: |
           printf 'ci-not-a-secret\n' > "$RUNNER_TEMP/vault_pass"
