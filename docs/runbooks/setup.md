@@ -60,8 +60,11 @@ ansible-playbook playbooks/site.yml
 ## 5. Check the servers
 
 ```bash
-pytest -m host --hosts=ansible://all --ansible-inventory=inventories/production/hosts.yml
+pytest -m host --hosts=ansible://all --force-ansible --ansible-inventory=inventories/production/hosts.yml
 ```
+
+`--force-ansible` makes every check go through Ansible, so the vault-backed
+host addresses resolve and root-only checks can use the sudo password.
 
 ## 6. Lockout drill (once per server)
 

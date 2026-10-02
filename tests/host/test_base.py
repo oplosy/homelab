@@ -7,9 +7,8 @@ import pytest
 pytestmark = pytest.mark.host
 
 
-def sshd_settings(host) -> dict[str, str]:
-    with host.sudo():
-        out = host.check_output("sshd -T")
+def sshd_settings(root) -> dict[str, str]:
+    out = root("sshd -T")
     return dict(line.split(" ", 1) for line in out.splitlines() if " " in line)
 
 
@@ -20,15 +19,20 @@ def test_admin_user_exists_with_sudo(host, expected) -> None:
     assert user.shell == "/bin/bash"
 
 
-def test_admin_has_exactly_the_configured_keys(host, expected) -> None:
+def test_checks_log_in_as_the_admin_user(host, expected) -> None:
+    # Root-only checks must go through sudo with the admin's password, as in
+    # production, never through a root login.
+    assert host.check_output("id -un") == expected["base_admin_user"]
+
+
+def test_admin_has_exactly_the_configured_keys(root, expected) -> None:
     name = expected["base_admin_user"]
-    with host.sudo():
-        keys = host.file(f"/home/{name}/.ssh/authorized_keys").content_string
+    keys = root(f"cat /home/{name}/.ssh/authorized_keys")
     assert keys.strip().splitlines() == [k.strip() for k in expected["base_admin_ssh_keys"]]
 
 
-def test_sshd_effective_settings(host, expected) -> None:
-    settings = sshd_settings(host)
+def test_sshd_effective_settings(root, expected) -> None:
+    settings = sshd_settings(root)
     assert settings["permitrootlogin"] == "no"
     assert settings["passwordauthentication"] == "no"
     assert settings["kbdinteractiveauthentication"] == "no"

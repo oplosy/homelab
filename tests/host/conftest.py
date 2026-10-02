@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,21 @@ def expected(host, request: pytest.FixtureRequest) -> dict:
     if not inventory:
         pytest.fail("host checks need --ansible-inventory to know the expected settings")
     return load_vars(Path(inventory), group_for(host.check_output("hostname")))
+
+
+@pytest.fixture
+def root(host) -> Callable[[str], str]:
+    """Run a shell command as root and return its stdout.
+
+    Goes through Ansible's become, which uses the inventory's sudo password;
+    testinfra's host.sudo() only prefixes "sudo" and cannot send a password.
+    A non-zero exit fails the test.
+    """
+
+    def run(command: str) -> str:
+        return host.ansible("ansible.builtin.shell", command, become=True, check=False)["stdout"]
+
+    return run
 
 
 @pytest.fixture

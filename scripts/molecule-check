@@ -24,6 +24,6 @@ ansible all -i molecule/default/inventory/hosts.yml -m ansible.builtin.command \
   -a "systemd-run --unit=secureedge-firewall-revert --on-active=1h /bin/true" >/dev/null
 molecule converge
 
-pytest -m host --run-disruptive \
-  --hosts=ansible://all \
+SECUREEDGE_CHECK_USER=secureedge-test pytest -m host --run-disruptive \
+  --hosts=ansible://all --force-ansible \
   --ansible-inventory=molecule/default/inventory/hosts.yml "$@"
