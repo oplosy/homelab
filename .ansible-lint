@@ -1,0 +1,5 @@
+---
+profile: production
+exclude_paths:
+  - .venv/
+  - inventories/*/group_vars/*/vault.yml
