@@ -42,10 +42,25 @@ Databases, object storage, and management interfaces stay private.
 | `edge01` | oauth2-proxy/tcp | 127.0.0.1 only | Auth checks from NGINX |
 | `app01` | WireGuard/udp | internet | Tunnel to `edge01` and owner devices |
 | `app01` | AtlasRisk/tcp | `edge01` over WireGuard only | Application upstream |
-| both | 22/tcp | key-only from the internet during first setup; WireGuard only afterwards | SSH administration |
+| both | 22/tcp | key-only from the internet during first setup, at most 10 new connections per minute per source IP; WireGuard only afterwards | SSH administration |
 
 Every other inbound connection is dropped. Port numbers are set in the
 inventory when the matching roles are built.
+
+## Firewall
+
+The `firewall` role owns one nftables table, `inet secureedge`, whose
+`input` chain drops by default. It never flushes the whole ruleset, so
+tables owned by other software (Docker) survive reloads and restarts.
+Ports open only through `firewall_allowed`, which each service role extends
+when it is added.
+
+Every change is checked with `nft -c` and applied behind a lockout guard: a
+one-off timer restores the previous ruleset after 120 seconds unless a
+fresh SSH connection succeeds and cancels it.
+
+Ports published by Docker bypass the `input` chain. Containers must
+therefore publish only on the WireGuard address or `127.0.0.1`.
 
 ## Failure behaviour
 

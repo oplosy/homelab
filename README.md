@@ -63,6 +63,19 @@ pytest --run-disruptive     # also run checks that stop services
 Authenticated checks need `SECUREEDGE_SESSION_COOKIE`. Without it they are
 skipped, never counted as passed.
 
+## Role tests (Molecule)
+
+Needs Docker Desktop running with WSL integration enabled for Ubuntu:
+
+```bash
+scripts/molecule-check
+```
+
+It builds two Ubuntu 26.04 containers, applies `playbooks/site.yml`, checks
+idempotence, runs the host checks, and removes the containers.
+
+To set up real servers, follow [docs/runbooks/setup.md](docs/runbooks/setup.md).
+
 ## Repository layout
 
 | Path | Contents |
@@ -73,4 +86,6 @@ skipped, never counted as passed.
 | `docs/adr/` | Decision records |
 | `docs/evidence/` | Status of each "done" criterion |
 
-Roles, playbooks and runbooks are added with the components they belong to.
+`roles/` holds `base` and `firewall`; `playbooks/` holds `site.yml`,
+`edge.yml`, `app.yml` and `bootstrap.yml`; `molecule/default/` is the test
+scenario.
