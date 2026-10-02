@@ -8,9 +8,14 @@ import subprocess
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
+PRODUCTION = REPO / "inventories" / "production"
 
 
-def inventory(tmp_path: Path) -> dict:
+def inventory(tmp_path: Path, inventory_dir: Path = PRODUCTION) -> dict:
+    """Read only hosts.yml, copied aside so group_vars (and the vault) never load."""
+    hosts = tmp_path / "shape-only" / "hosts.yml"
+    hosts.parent.mkdir()
+    hosts.write_text((inventory_dir / "hosts.yml").read_text(encoding="utf-8"), encoding="utf-8")
     vault_pass = tmp_path / "vault_pass"
     vault_pass.write_text("unused-in-tests\n", encoding="utf-8")
     env = {
@@ -19,10 +24,28 @@ def inventory(tmp_path: Path) -> dict:
         "ANSIBLE_VAULT_PASSWORD_FILE": str(vault_pass),
     }
     result = subprocess.run(
-        ["ansible-inventory", "--list"], cwd=REPO, env=env, capture_output=True, text=True
+        ["ansible-inventory", "-i", str(hosts), "--list"],
+        cwd=REPO, env=env, capture_output=True, text=True,
     )
     assert result.returncode == 0 and result.stdout.strip(), result.stderr
     return json.loads(result.stdout)
+
+
+def test_shape_check_survives_an_undecryptable_vault(tmp_path: Path) -> None:
+    inventory_dir = tmp_path / "inventory"
+    vault = inventory_dir / "group_vars" / "all" / "vault.yml"
+    vault.parent.mkdir(parents=True)
+    (inventory_dir / "hosts.yml").write_text(
+        (PRODUCTION / "hosts.yml").read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    vault.write_text("vault_edge01_ansible_host: 203.0.113.10\n", encoding="utf-8")
+    real_password = tmp_path / "real_password"
+    real_password.write_text("the-owners-real-password\n", encoding="utf-8")
+    subprocess.run(
+        ["ansible-vault", "encrypt", "--vault-password-file", str(real_password), str(vault)],
+        check=True, capture_output=True,
+    )
+    assert inventory(tmp_path, inventory_dir)["edge"]["hosts"] == ["edge01"]
 
 
 def test_one_edge_host_and_one_app_host(tmp_path: Path) -> None:
