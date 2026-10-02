@@ -48,6 +48,7 @@ secure-edge/
 ├── .ansible-lint             # lint config (added with the first role)
 ├── pytest.ini                # markers and test paths (added with the first test)
 ├── .gitignore                # .vault_pass, reports/, tests/targets.yml, *.retry
+├── .gitattributes            # force LF line endings (§2 rules)
 ├── .github/
 │   └── workflows/
 │       └── ci.yml            # ansible-lint + pytest --collect-only
@@ -82,6 +83,10 @@ secure-edge/
   roles, stub runbooks, or placeholder tests.
 - Nothing in the repository may contain real secrets, private keys, session
   tokens, real financial data, or real target IPs in plain text.
+- All text files use LF line endings, enforced by `.gitattributes`
+  (`* text=auto eol=lf`). The owner edits on Windows, but templates, scripts,
+  and configs are deployed to Linux hosts, where CRLF breaks shell scripts and
+  some daemon configs. Ansible Vault files are text and follow the same rule.
 
 ## 3. Roles
 
