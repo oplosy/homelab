@@ -1,0 +1,9 @@
+---
+# Copy to tests/targets.yml (gitignored) and fill in, or set the matching
+# SECUREEDGE_* environment variables (e.g. SECUREEDGE_DOMAIN), which win.
+# Values below are documentation-only (RFC 5737 / .test) placeholders.
+domain: app.example.test
+edge_public_ip: 203.0.113.10
+app_public_ip: 203.0.113.20
+edge_wg_ip: 10.8.0.1
+app_wg_ip: 10.8.0.2
