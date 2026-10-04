@@ -7,3 +7,8 @@ base_admin_password_hash: "{{ vault_base_admin_password_hash }}"
 ansible_user: "{{ base_admin_user }}"
 ansible_ssh_private_key_file: ~/.ssh/server_ed25519
 ansible_become_password: "{{ vault_base_admin_password }}"
+
+# WireGuard. The port is repeated literally in each group's firewall_allowed;
+# tests/unit/test_production_vars.py keeps them equal. wireguard_peers is
+# added by the owner (docs/runbooks/setup.md, section "WireGuard").
+wireguard_port: 51820

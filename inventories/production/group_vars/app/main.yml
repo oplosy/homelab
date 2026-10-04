@@ -1,2 +1,7 @@
 ---
 base_reboot_time: "01:30"
+firewall_allowed:
+  - name: wireguard
+    proto: udp
+    port: 51820
+    from: any

@@ -25,6 +25,9 @@ def test_reboot_slots_differ_per_group() -> None:
     assert load_vars(HOSTS, "app")["base_reboot_time"] == "01:30"
 
 
-def test_no_ports_are_opened_yet() -> None:
+def test_only_wireguard_is_open_on_its_port() -> None:
+    port = load_vars(HOSTS, "edge")["wireguard_port"]
     for group in ("edge", "app"):
-        assert load_vars(HOSTS, group).get("firewall_allowed", []) == []
+        assert load_vars(HOSTS, group)["firewall_allowed"] == [
+            {"name": "wireguard", "proto": "udp", "port": port, "from": "any"}
+        ]
