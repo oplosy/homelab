@@ -73,6 +73,8 @@ scripts/molecule-check
 
 It builds two Ubuntu 26.04 containers, applies `playbooks/site.yml`, checks
 idempotence, runs the host checks, and removes the containers.
+The `app01` container runs privileged because it hosts Docker itself; its
+Docker state lives in two named volumes that the script removes afterwards.
 
 To set up real servers, follow [docs/runbooks/setup.md](docs/runbooks/setup.md).
 
