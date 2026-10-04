@@ -1,0 +1,89 @@
+---
+- name: Check edge proxy settings
+  ansible.builtin.assert:
+    that:
+      - secureedge_app is defined
+      - secureedge_app.name | default('') is match('^[a-z][a-z0-9-]{0,62}$')
+      - secureedge_app.domain | default('') is match('^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
+      - secureedge_app.upstream.address | default('') is match('^(' ~ edge_proxy_octet ~ '\.){3}' ~ edge_proxy_octet ~ '$')
+      - secureedge_app.upstream.port | default('') is integer
+      - (secureedge_app.upstream.port | default(0) | int) >= 1
+      - (secureedge_app.upstream.port | default(0) | int) <= 65535
+      - secureedge_app.api_prefix | default('') is match('^/([a-z0-9_-]+/)+$')
+      - secureedge_app.max_body | default('') is match('^[1-9][0-9]{0,3}[km]$')
+      - secureedge_app.rate_limits.api.rate | default('') is match('^[1-9][0-9]{0,4}r/[sm]$')
+      - secureedge_app.rate_limits.api.burst | default('') is integer
+      - (secureedge_app.rate_limits.api.burst | default(-1) | int) >= 0
+      - edge_proxy_auth_url is match('^http://127\.0\.0\.1:[0-9]{1,5}/[A-Za-z0-9/_-]*$')
+      - edge_proxy_crs_paranoia | int in [1, 2, 3, 4]
+      - edge_proxy_hsts_max_age | int >= 0
+    fail_msg: >-
+      edge_proxy needs a complete secureedge_app (lower-case domain, IPv4
+      upstream address and integer port, api_prefix like /api/, max_body like
+      12m, rate like 10r/s, integer burst) and an auth URL on 127.0.0.1. See
+      docs/runbooks/setup.md, section "Domain and certificates".
+    quiet: true
+  vars:
+    edge_proxy_octet: '(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])'
+
+- name: Install NGINX, ModSecurity and OWASP CRS
+  ansible.builtin.apt:
+    name:
+      - nginx
+      - libnginx-mod-http-modsecurity
+      - modsecurity-crs
+    state: present
+
+- name: Disable the package's default site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload NGINX
+
+- name: Create the edge proxy directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /etc/nginx/secureedge
+    - "{{ edge_proxy_web_root }}"
+
+- name: Write the ModSecurity rules file
+  ansible.builtin.template:
+    src: modsecurity.conf.j2
+    dest: /etc/nginx/secureedge/modsecurity.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload NGINX
+
+- name: Write the NGINX site
+  ansible.builtin.template:
+    src: secureedge.conf.j2
+    dest: /etc/nginx/conf.d/secureedge.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload NGINX
+
+- name: Write a placeholder page until the web bundle is deployed
+  ansible.builtin.template:
+    src: index.html.j2
+    dest: "{{ edge_proxy_web_root }}/index.html"
+    owner: root
+    group: root
+    mode: "0644"
+    force: false
+
+- name: Run NGINX at boot
+  ansible.builtin.systemd_service:
+    name: nginx
+    enabled: true
+    state: started
+
+# tls's issue tasks run next and need port 80 serving the challenge files.
+- name: Apply NGINX changes before the certificate is requested
+  ansible.builtin.meta: flush_handlers

@@ -228,3 +228,35 @@ def test_tls_accepts_good_input(tmp_path: Path) -> None:
     result = run_role(tmp_path, "tls", app_with())
     assert "Check TLS settings" in result.stdout
     assert "tls needs" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "role_vars",
+    [
+        {},
+        app_with(domain="atlasrisk.example.com; return 200"),
+        app_with(upstream={"address": "10.8.0.2:8080", "port": 8080}),
+        app_with(upstream={"address": "10.8.0.2", "port": "8080"}),
+        app_with(upstream={"address": "10.8.0.2", "port": 70000}),
+        app_with(api_prefix="/api"),
+        app_with(max_body="12MB"),
+        app_with(rate_limits={"api": {"rate": "10/s", "burst": 20}}),
+        app_with(rate_limits={"api": {"rate": "10r/s", "burst": -1}}),
+        {**app_with(), "edge_proxy_auth_url": "http://10.8.0.1:4180/oauth2/auth"},
+        {**app_with(), "edge_proxy_crs_paranoia": 5},
+    ],
+    ids=["no-app", "injected-domain", "address-with-port", "port-as-string", "port-range",
+         "prefix-without-slash", "bad-body-size", "bad-rate", "negative-burst",
+         "remote-auth-url", "bad-paranoia"],
+)
+def test_edge_proxy_rejects_bad_input(tmp_path: Path, role_vars: dict) -> None:
+    result = run_role(tmp_path, "edge_proxy", role_vars)
+    assert result.returncode != 0
+    assert "Check edge proxy settings" in result.stdout
+    assert "Install NGINX, ModSecurity and OWASP CRS" not in result.stdout
+
+
+def test_edge_proxy_accepts_good_input(tmp_path: Path) -> None:
+    result = run_role(tmp_path, "edge_proxy", app_with())
+    assert "Check edge proxy settings" in result.stdout
+    assert "edge_proxy needs" not in result.stdout

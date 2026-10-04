@@ -1,0 +1,11 @@
+---
+# Must equal tls_dir and tls_webroot (tests/unit/test_edge_proxy_templates.py).
+edge_proxy_tls_dir: /etc/secureedge/tls
+edge_proxy_acme_webroot: /var/lib/secureedge/acme
+# The web bundle. A placeholder index.html is written only if none exists.
+edge_proxy_web_root: "/var/www/{{ secureedge_app.name }}"
+# The auth check; oauth2-proxy listens here once that role exists. Nothing
+# listening means every application request gets 500 (fail closed).
+edge_proxy_auth_url: http://127.0.0.1:4180/oauth2/auth
+edge_proxy_crs_paranoia: 1
+edge_proxy_hsts_max_age: 31536000
