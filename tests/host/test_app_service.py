@@ -78,14 +78,24 @@ def test_admin_is_not_in_the_docker_group(app_host, expected) -> None:
     assert "docker" not in app_host.user(expected["base_admin_user"]).groups
 
 
+def test_containers_use_the_rotated_log_driver(app_host, root) -> None:
+    # Containers keep the log driver they were created with, so the daemon
+    # default alone does not prove their logs are bounded.
+    for service in ("postgres", "garage"):
+        assert container(root, service)["HostConfig"]["LogConfig"]["Type"] == "local", service
+
+
 @pytest.mark.disruptive
 def test_containers_survive_a_docker_restart(app_host, root) -> None:
-    before = {service: container(root, service)["Id"] for service in ("postgres", "garage")}
+    before = {service: container(root, service) for service in ("postgres", "garage")}
     root("systemctl restart docker")
-    for service, container_id in before.items():
-        details = container(root, service)
-        assert details["Id"] == container_id, f"{service} was recreated"
-        assert details["State"]["Running"], service
+    for service, old in before.items():
+        new = container(root, service)
+        assert new["Id"] == old["Id"], f"{service} was recreated"
+        assert new["State"]["Running"], service
+        # Without live-restore, "restart: unless-stopped" restarts the same
+        # container with a new StartedAt; with it, the process never stops.
+        assert new["State"]["StartedAt"] == old["State"]["StartedAt"], f"{service} was restarted"
 
 
 def test_edge_has_no_docker(edge_host) -> None:

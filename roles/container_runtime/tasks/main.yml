@@ -1,11 +1,6 @@
 ---
-- name: Install Docker and Compose from Ubuntu
-  ansible.builtin.apt:
-    name:
-      - docker.io
-      - docker-compose-v2
-    state: present
-
+# daemon.json goes in before the packages: apt starts dockerd on install, and
+# containers keep the log driver they were created with.
 - name: Create the Docker configuration directory
   ansible.builtin.file:
     path: /etc/docker
@@ -23,8 +18,18 @@
     mode: "0644"
   notify: Restart Docker
 
+- name: Install Docker and Compose from Ubuntu
+  ansible.builtin.apt:
+    name:
+      - docker.io
+      - docker-compose-v2
+    state: present
+
 - name: Run Docker at boot
   ansible.builtin.systemd_service:
     name: docker
     enabled: true
     state: started
+
+- name: Apply Docker daemon changes before any container is created
+  ansible.builtin.meta: flush_handlers
