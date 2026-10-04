@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from support.commands import require_success
 from support.inventory import group_for, load_vars
 
 
@@ -37,7 +38,8 @@ def root(host) -> Callable[[str], str]:
     """
 
     def run(command: str) -> str:
-        return host.ansible("ansible.builtin.shell", command, become=True, check=False)["stdout"]
+        result = host.ansible("ansible.builtin.shell", command, become=True, check=False)
+        return require_success(result, command)
 
     return run
 
