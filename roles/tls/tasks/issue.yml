@@ -1,0 +1,26 @@
+---
+# Runs after edge_proxy, once NGINX serves tls_webroot on port 80. certbot
+# stores the server and the deploy hook in the lineage's renewal
+# configuration, so certbot.timer renews the same way.
+- name: Issue the certificate
+  ansible.builtin.command:
+    argv: "{{ tls_certbot_argv }}"
+  environment: "{{ {'REQUESTS_CA_BUNDLE': tls_acme_ca_bundle} if tls_acme_ca_bundle else {} }}"
+  register: tls_issue
+  changed_when: "'not yet due for renewal' not in (tls_issue.stdout + tls_issue.stderr)"
+  vars:
+    tls_certbot_argv: >-
+      {{ ['certbot', 'certonly', '--non-interactive', '--agree-tos',
+          '--webroot', '-w', tls_webroot,
+          '--cert-name', tls_cert_name, '-d', secureedge_app.domain,
+          '--server', tls_acme_server,
+          '--deploy-hook', '/usr/local/sbin/secureedge-tls-deploy',
+          '--keep-until-expiring']
+         + (['--email', tls_acme_email] if tls_acme_email
+            else ['--register-unsafely-without-email']) }}
+
+- name: Renew certificates on the package's timer
+  ansible.builtin.systemd_service:
+    name: certbot.timer
+    enabled: true
+    state: started

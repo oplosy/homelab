@@ -189,3 +189,42 @@ def test_app_service_accepts_good_input(tmp_path: Path) -> None:
     assert "AtlasRisk data services need" not in result.stdout
     for value in GOOD_APP.values():
         assert value not in result.stdout + result.stderr
+
+
+GOOD_SECUREEDGE_APP = {
+    "name": "atlasrisk",
+    "domain": "atlasrisk.example.com",
+    "upstream": {"address": "10.8.0.2", "port": 8080},
+    "api_prefix": "/api/",
+    "max_body": "12m",
+    "rate_limits": {"api": {"rate": "10r/s", "burst": 20}},
+}
+
+
+def app_with(**changes: object) -> dict:
+    return {"secureedge_app": {**GOOD_SECUREEDGE_APP, **changes}}
+
+
+@pytest.mark.parametrize(
+    "role_vars",
+    [
+        {},
+        app_with(domain="AtlasRisk.example.com"),
+        app_with(domain="atlasrisk.example.com; return 200"),
+        app_with(name="Atlas Risk"),
+        {**app_with(), "tls_acme_server": "http://acme.example.com/dir"},
+        {**app_with(), "tls_acme_email": "not-an-email"},
+    ],
+    ids=["no-app", "uppercase-domain", "injected-domain", "bad-name", "plain-http-acme", "bad-email"],
+)
+def test_tls_rejects_bad_input(tmp_path: Path, role_vars: dict) -> None:
+    result = run_role(tmp_path, "tls", role_vars)
+    assert result.returncode != 0
+    assert "Check TLS settings" in result.stdout
+    assert "Install certbot and openssl" not in result.stdout
+
+
+def test_tls_accepts_good_input(tmp_path: Path) -> None:
+    result = run_role(tmp_path, "tls", app_with())
+    assert "Check TLS settings" in result.stdout
+    assert "tls needs" not in result.stdout
