@@ -47,6 +47,19 @@ Databases, object storage, and management interfaces stay private.
 Every other inbound connection is dropped. Port numbers are set in the
 inventory when the matching roles are built.
 
+## WireGuard
+
+| Peer | Address | Connects to |
+|---|---|---|
+| `edge01` | `10.8.0.1` | `app01`, both devices |
+| `app01` | `10.8.0.2` | `edge01`, both devices |
+| `pc-windows` | `10.8.0.11` | both servers |
+| `phone-android` | `10.8.0.12` | both servers |
+
+Both servers listen on UDP 51820. Devices route only the two server
+addresses through the tunnel and keep it alive every 25 seconds; servers
+forward nothing. See [adr/0006-wireguard-mesh.md](adr/0006-wireguard-mesh.md).
+
 ## Firewall
 
 The `firewall` role owns one nftables table, `inet secureedge`, whose

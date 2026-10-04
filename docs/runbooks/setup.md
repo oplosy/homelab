@@ -66,7 +66,77 @@ pytest -m host --hosts=ansible://all --force-ansible --ansible-inventory=invento
 `--force-ansible` makes every check go through Ansible, so the vault-backed
 host addresses resolve and root-only checks can use the sudo password.
 
-## 6. Lockout drill (once per server)
+## 6. WireGuard
+
+Run this before the first `site.yml` (step 4): until it is done, the
+`wireguard` role stops with a message pointing here.
+
+Create the key pairs:
+
+```bash
+scripts/wireguard-keys edge01 app01 pc-windows phone-android
+```
+
+Paste the first block into the vault:
+
+```bash
+ansible-vault edit inventories/production/group_vars/all/vault.yml
+```
+
+Add this to `inventories/production/group_vars/all/main.yml`, with the
+public keys from the second block, and commit it (public keys are not
+secret):
+
+```yaml
+wireguard_peers:
+  - name: edge01
+    kind: server
+    address: 10.8.0.1
+    public_key: <edge01 public key>
+    endpoint: "{{ vault_edge01_ansible_host }}"
+  - name: app01
+    kind: server
+    address: 10.8.0.2
+    public_key: <app01 public key>
+    endpoint: "{{ vault_app01_ansible_host }}"
+  - name: pc-windows
+    kind: device
+    address: 10.8.0.11
+    public_key: <pc-windows public key>
+  - name: phone-android
+    kind: device
+    address: 10.8.0.12
+    public_key: <phone-android public key>
+    qr: true
+```
+
+After `site.yml` has run, create the device configs:
+
+```bash
+ansible-playbook playbooks/wireguard-clients.yml
+```
+
+- **Windows:** in WireGuard for Windows, choose "Import tunnel(s) from file"
+  and open
+  `\\wsl.localhost\Ubuntu\home\atlas\.config\secureedge\wireguard\pc-windows.conf`.
+- **Android:** in the WireGuard app, choose "Scan from QR code" and scan
+  `phone-android.png` from the same folder, opened on the PC screen.
+
+Check from Windows and from the phone (with the tunnel on): `ping 10.8.0.1`
+and `ping 10.8.0.2`. Then check from WSL:
+
+```bash
+ping -c 2 10.8.0.1
+```
+
+Write down whether WSL reaches the tunnel through Windows. Moving SSH behind
+WireGuard depends on it.
+
+Changing a server's own WireGuard address or the port needs
+`sudo systemctl restart wg-quick@wg0` on that server after `site.yml`;
+peer changes apply live.
+
+## 7. Lockout drill (once per server)
 
 Prove the firewall rolls itself back. This makes SSH reachable only over a
 WireGuard interface that does not exist yet:
