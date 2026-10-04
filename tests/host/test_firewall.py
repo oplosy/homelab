@@ -90,3 +90,11 @@ def test_revert_without_backup_removes_our_table(host, root) -> None:
         root(f"nft -f {LIVE}")
         root(f"mv {PREV}.keep {PREV} || true")
         root("rm -f /root/secureedge.nft.keep")
+
+
+def test_forward_chain_blocks_routing_from_wireguard(root, expected) -> None:
+    wg = expected.get("firewall_wireguard_interface", "wg0")
+    chain = root("nft list chain inet secureedge forward")
+    assert "policy accept;" in chain
+    assert f'iifname "{wg}" ct status dnat accept' in chain
+    assert f'iifname "{wg}" drop' in chain
