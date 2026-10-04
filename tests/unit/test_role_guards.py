@@ -92,3 +92,54 @@ def test_base_accepts_good_input(tmp_path: Path) -> None:
     result = run_role(tmp_path, "base", GOOD_BASE)
     assert "Check required variables" in result.stdout
     assert "base needs" not in result.stdout
+
+
+EDGE_PRIVATE = "yK/yJBCr9GFwm5ANQs43RkodcssVvJ4uwgKWrOHWenk="
+GOOD_WIREGUARD = {
+    "wireguard_peers": [
+        {"name": "localhost", "kind": "server", "address": "10.8.0.1",
+         "public_key": "BiRS0VHz507vBGrqey4xsf8g30R5XnGLVTjjKa/XmW8=", "endpoint": "127.0.0.1"},
+        {"name": "app01", "kind": "server", "address": "10.8.0.2",
+         "public_key": "cAuc07jChyi+e/+SwELAjXuAO6dwgOWtnFLVZttMASM=", "endpoint": "127.0.0.2"},
+        {"name": "pc-test", "kind": "device", "address": "10.8.0.11",
+         "public_key": "5U0W8SdmN3dXBJDSr/e4x+0ebN/YM3Kf5JwHPo/VTF4="},
+    ],
+    "vault_wireguard_private_keys": {"localhost": EDGE_PRIVATE},
+}
+
+
+def with_peer(index: int, **changes: str) -> list[dict]:
+    peers = [dict(peer) for peer in GOOD_WIREGUARD["wireguard_peers"]]
+    peers[index].update(changes)
+    return peers
+
+
+@pytest.mark.parametrize(
+    "role_vars",
+    [
+        {"vault_wireguard_private_keys": GOOD_WIREGUARD["vault_wireguard_private_keys"]},
+        {**GOOD_WIREGUARD, "wireguard_peers": with_peer(1, address="10.8.0.1")},
+        {**GOOD_WIREGUARD, "wireguard_peers": with_peer(2, address="10.9.0.11")},
+        {**GOOD_WIREGUARD, "vault_wireguard_private_keys": {"app01": EDGE_PRIVATE}},
+        {**GOOD_WIREGUARD, "wireguard_peers": with_peer(0, name="edge01")},
+        {**GOOD_WIREGUARD, "vault_wireguard_private_keys": {"localhost": EDGE_PRIVATE[:-2] + "="}},
+        {**GOOD_WIREGUARD, "wireguard_peers": with_peer(2, public_key="not-a-key")},
+        {**GOOD_WIREGUARD, "wireguard_peers": with_peer(1, endpoint="")},
+    ],
+    ids=["no-peers", "duplicate-address", "outside-subnet", "missing-private-key",
+         "host-not-a-peer", "bad-private-key", "bad-public-key", "server-without-endpoint"],
+)
+def test_wireguard_rejects_bad_input(tmp_path: Path, role_vars: dict) -> None:
+    result = run_role(tmp_path, "wireguard", role_vars)
+    assert result.returncode != 0
+    assert "Check WireGuard settings" in result.stdout
+    assert "Install WireGuard tools" not in result.stdout
+    assert EDGE_PRIVATE not in result.stdout + result.stderr
+
+
+def test_wireguard_accepts_good_input(tmp_path: Path) -> None:
+    result = run_role(tmp_path, "wireguard", GOOD_WIREGUARD)
+    assert "Check WireGuard settings" in result.stdout
+    assert "Check this server's WireGuard private key" in result.stdout
+    assert "WireGuard needs" not in result.stdout
+    assert EDGE_PRIVATE not in result.stdout + result.stderr

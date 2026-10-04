@@ -6,3 +6,29 @@ base_admin_ssh_keys:
 # openssl passwd -6 -salt moleculetestsalt molecule-test-password
 base_admin_password_hash: "$6$moleculetestsalt$u6mAoI3C858mb8IQpZ49tMDK.TvvHhMHqGOQZpu63TI/HEKg6bZkHyfV3BszaQ94fUjohgA/fhj9GTpcePUHK/"
 base_set_hostname: false
+
+# Throwaway WireGuard keys for the Molecule containers only.
+wireguard_port: 51820
+wireguard_peers:
+  - name: edge01
+    kind: server
+    address: 10.8.0.1
+    public_key: BiRS0VHz507vBGrqey4xsf8g30R5XnGLVTjjKa/XmW8=
+    endpoint: edge01
+  - name: app01
+    kind: server
+    address: 10.8.0.2
+    public_key: cAuc07jChyi+e/+SwELAjXuAO6dwgOWtnFLVZttMASM=
+    endpoint: app01
+  - name: pc-test
+    kind: device
+    address: 10.8.0.11
+    public_key: 5U0W8SdmN3dXBJDSr/e4x+0ebN/YM3Kf5JwHPo/VTF4=
+  - name: phone-test
+    kind: device
+    address: 10.8.0.12
+    public_key: jhjDcLdlNIOFN3TBBdBxXuHrysxeszeI2rCpOMObODw=
+    qr: true
+vault_wireguard_private_keys:
+  edge01: yK/yJBCr9GFwm5ANQs43RkodcssVvJ4uwgKWrOHWenk=
+  app01: mBI01bKLalFh4ZZ58P4uRZ0TJKN8OgitmZB96MaOO00=

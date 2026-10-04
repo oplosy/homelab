@@ -1,0 +1,16 @@
+# Managed by SecureEdge (role wireguard). Contains a private key: root only.
+{% set me = wireguard_peers | selectattr('name', 'equalto', inventory_hostname) | first %}
+[Interface]
+Address = {{ me.address }}/24
+ListenPort = {{ wireguard_port }}
+PrivateKey = {{ vault_wireguard_private_keys[inventory_hostname] }}
+{% for peer in wireguard_peers if peer.name != inventory_hostname %}
+
+# {{ peer.name }} ({{ peer.kind }})
+[Peer]
+PublicKey = {{ peer.public_key }}
+AllowedIPs = {{ peer.address }}/32
+{% if peer.kind == 'server' %}
+Endpoint = {{ peer.endpoint }}:{{ wireguard_port }}
+{% endif %}
+{% endfor %}

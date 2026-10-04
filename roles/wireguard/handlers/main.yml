@@ -1,0 +1,7 @@
+---
+# wg-quick@.service reloads with "wg syncconf": peer changes apply without
+# dropping the tunnels that stay.
+- name: Reload WireGuard
+  ansible.builtin.systemd_service:
+    name: "wg-quick@{{ wireguard_interface }}"
+    state: reloaded

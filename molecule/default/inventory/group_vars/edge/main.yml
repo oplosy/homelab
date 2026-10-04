@@ -5,3 +5,7 @@ firewall_allowed:
     proto: tcp
     port: 8443
     from: any
+  - name: wireguard
+    proto: udp
+    port: 51820
+    from: any

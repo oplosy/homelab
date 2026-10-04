@@ -5,3 +5,7 @@ firewall_allowed:
     proto: udp
     port: 51999
     from: wireguard
+  - name: wireguard
+    proto: udp
+    port: 51820
+    from: any
