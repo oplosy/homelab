@@ -1,0 +1,79 @@
+---
+- name: Check AtlasRisk data service settings
+  ansible.builtin.assert:
+    that:
+      - app_service_postgres_image is match('^[^@\s]+@sha256:[0-9a-f]{64}$')
+      - app_service_garage_image is match('^[^@\s]+@sha256:[0-9a-f]{64}$')
+      - app_service_postgres_db is match('^[a-z_][a-z0-9_]{0,62}$')
+      - app_service_postgres_user is match('^[a-z_][a-z0-9_]{0,62}$')
+      - app_service_garage_bucket is match('^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$')
+      - vault_atlasrisk_postgres_password is defined
+      - vault_atlasrisk_garage_access_key is defined
+      - vault_atlasrisk_garage_secret_key is defined
+      - vault_atlasrisk_garage_rpc_secret is defined
+    fail_msg: >-
+      AtlasRisk data services need digest-pinned images and the four
+      vault_atlasrisk_* secrets. See docs/runbooks/setup.md, section
+      "AtlasRisk data services".
+    quiet: true
+
+- name: Check AtlasRisk data service secrets
+  ansible.builtin.assert:
+    that:
+      - vault_atlasrisk_postgres_password is match('^[A-Za-z0-9+/=._-]{32,}$')
+      - vault_atlasrisk_garage_access_key is match('^GK[0-9a-f]{24}$')
+      - vault_atlasrisk_garage_secret_key is match('^[0-9a-f]{64}$')
+      - vault_atlasrisk_garage_rpc_secret is match('^[0-9a-f]{64}$')
+    quiet: true
+  no_log: true
+
+# The postgres mount must be traversable by the container's postgres user
+# (uid 999); the data directory inside it is created 0700 by PostgreSQL.
+- name: Create the AtlasRisk directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ app_service_config_dir }}", mode: "0700" }
+    - { path: "{{ app_service_root }}", mode: "0700" }
+    - { path: "{{ app_service_root }}/postgres", mode: "0755" }
+    - { path: "{{ app_service_root }}/garage", mode: "0700" }
+    - { path: "{{ app_service_root }}/garage/meta", mode: "0700" }
+    - { path: "{{ app_service_root }}/garage/data", mode: "0700" }
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Write the Compose project
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ app_service_config_dir }}/compose.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Write the Garage configuration
+  ansible.builtin.template:
+    src: garage.toml.j2
+    dest: "{{ app_service_config_dir }}/garage.toml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Write the data service secrets
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ app_service_config_dir }}/.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Start the AtlasRisk data services
+  community.docker.docker_compose_v2:
+    project_src: "{{ app_service_config_dir }}"
+    state: present
+    wait: true
+    wait_timeout: 300

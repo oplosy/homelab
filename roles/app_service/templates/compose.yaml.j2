@@ -1,0 +1,45 @@
+# Managed by SecureEdge (role app_service). No service publishes a port;
+# secrets are interpolated from the root-only .env next to this file.
+name: {{ app_service_project }}
+
+services:
+  postgres:
+    image: {{ app_service_postgres_image }}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATA: /var/lib/postgresql/18/docker
+    volumes:
+      - {{ app_service_root }}/postgres:/var/lib/postgresql
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  garage:
+    image: {{ app_service_garage_image }}
+    restart: unless-stopped
+    command: [/garage, server, --single-node, --default-bucket, --default-access-key]
+    environment:
+      GARAGE_DEFAULT_ACCESS_KEY: ${GARAGE_ACCESS_KEY}
+      GARAGE_DEFAULT_SECRET_KEY: ${GARAGE_SECRET_KEY}
+      GARAGE_DEFAULT_BUCKET: ${GARAGE_BUCKET}
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET}
+    volumes:
+      - {{ app_service_config_dir }}/garage.toml:/etc/garage.toml:ro
+      - {{ app_service_root }}/garage/meta:/var/lib/garage/meta
+      - {{ app_service_root }}/garage/data:/var/lib/garage/data
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: [CMD, /garage, status]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+      start_period: 15s

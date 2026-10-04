@@ -6,3 +6,5 @@
     - base
     - wireguard
     - firewall
+    - container_runtime
+    - app_service
