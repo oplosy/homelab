@@ -57,6 +57,7 @@ provisioner:
       hosts: inventory/hosts.yml
       group_vars: inventory/group_vars/
   playbooks:
+    prepare: prepare.yml
     converge: converge.yml
 verifier:
   name: ansible

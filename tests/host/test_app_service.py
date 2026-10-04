@@ -6,25 +6,9 @@ import json
 
 import pytest
 
-from support.inventory import group_for
-
 pytestmark = pytest.mark.host
 
 COMPOSE = "docker compose --project-directory /etc/atlasrisk"
-
-
-@pytest.fixture
-def app_host(host):
-    if group_for(host.check_output("hostname")) != "app":
-        pytest.skip("app servers only")
-    return host
-
-
-@pytest.fixture
-def edge_host(host):
-    if group_for(host.check_output("hostname")) != "edge":
-        pytest.skip("edge servers only")
-    return host
 
 
 def container(root, service: str) -> dict:
