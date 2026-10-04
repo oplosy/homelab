@@ -95,6 +95,7 @@ def test_base_accepts_good_input(tmp_path: Path) -> None:
 
 
 EDGE_PRIVATE = "yK/yJBCr9GFwm5ANQs43RkodcssVvJ4uwgKWrOHWenk="
+APP_PRIVATE = "mBI01bKLalFh4ZZ58P4uRZ0TJKN8OgitmZB96MaOO00="
 GOOD_WIREGUARD = {
     "wireguard_peers": [
         {"name": "localhost", "kind": "server", "address": "10.8.0.1",
@@ -125,9 +126,12 @@ def with_peer(index: int, **changes: str) -> list[dict]:
         {**GOOD_WIREGUARD, "vault_wireguard_private_keys": {"localhost": EDGE_PRIVATE[:-2] + "="}},
         {**GOOD_WIREGUARD, "wireguard_peers": with_peer(2, public_key="not-a-key")},
         {**GOOD_WIREGUARD, "wireguard_peers": with_peer(1, endpoint="")},
+        {**GOOD_WIREGUARD, "vault_wireguard_private_keys": {"localhost": GOOD_WIREGUARD["wireguard_peers"][0]["public_key"]}},
+        {**GOOD_WIREGUARD, "vault_wireguard_private_keys": {"localhost": APP_PRIVATE}},
     ],
     ids=["no-peers", "duplicate-address", "outside-subnet", "missing-private-key",
-         "host-not-a-peer", "bad-private-key", "bad-public-key", "server-without-endpoint"],
+         "host-not-a-peer", "bad-private-key", "bad-public-key", "server-without-endpoint",
+         "public-key-as-private", "other-servers-private-key"],
 )
 def test_wireguard_rejects_bad_input(tmp_path: Path, role_vars: dict) -> None:
     result = run_role(tmp_path, "wireguard", role_vars)

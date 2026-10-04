@@ -81,3 +81,30 @@ def test_qr_png_only_for_qr_devices(out_dir: Path) -> None:
     assert png.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
     assert mode(png) == 0o600
     assert not (out_dir / "pc-test.png").exists()
+
+
+def test_mismatched_device_key_writes_nothing(tmp_path: Path) -> None:
+    inventory = tmp_path / "inventory"
+    (inventory / "group_vars" / "all").mkdir(parents=True)
+    (inventory / "hosts.yml").write_text("---\nall: {}\n", encoding="utf-8")
+    swapped = {"pc-test": PRIVATE["phone-test"], "phone-test": PRIVATE["pc-test"]}
+    (inventory / "group_vars" / "all" / "main.yml").write_text(
+        yaml.safe_dump({"wireguard_port": 51820, "wireguard_peers": PEERS,
+                        "vault_wireguard_private_keys": swapped}),
+        encoding="utf-8",
+    )
+    vault_pass = tmp_path / "vault_pass"
+    vault_pass.write_text("unused\n", encoding="utf-8")
+    out = tmp_path / "clients"
+    env = {**os.environ, "ANSIBLE_CONFIG": str(REPO / "ansible.cfg"),
+           "ANSIBLE_VAULT_PASSWORD_FILE": str(vault_pass)}
+    result = subprocess.run(
+        ["ansible-playbook", "-i", str(inventory / "hosts.yml"),
+         str(REPO / "playbooks" / "wireguard-clients.yml"),
+         "-e", f"wireguard_clients_dir={out}"],
+        cwd=REPO, env=env, capture_output=True, text=True,
+    )
+    assert result.returncode != 0
+    assert not out.exists()
+    for key in PRIVATE.values():
+        assert key not in result.stdout + result.stderr

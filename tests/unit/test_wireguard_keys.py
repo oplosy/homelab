@@ -53,3 +53,25 @@ def test_rejects_duplicate_names() -> None:
     assert result.returncode == 2
     assert result.stdout == ""
     assert "edge01" in result.stderr
+
+
+def derive(private_b64: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, str(SCRIPT), "--public"],
+        input=private_b64 + "\n", capture_output=True, text=True,
+    )
+
+
+def test_public_mode_derives_the_public_key() -> None:
+    private = "yK/yJBCr9GFwm5ANQs43RkodcssVvJ4uwgKWrOHWenk="
+    result = derive(private)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "BiRS0VHz507vBGrqey4xsf8g30R5XnGLVTjjKa/XmW8=\n"
+
+
+def test_public_mode_rejects_malformed_keys_without_echoing_them() -> None:
+    bad = "yK/yJBCr9GFwm5ANQs43RkodcssVvJ4uwgKWrOHWe="
+    result = derive(bad)
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert bad not in result.stderr

@@ -43,6 +43,36 @@
     quiet: true
   no_log: true
 
+# Runs on the controller, so a key pasted under the wrong name is caught
+# before anything on the server changes.
+- name: Derive this server's public key from its private key
+  ansible.builtin.command:
+    argv:
+      - "{{ ansible_playbook_python }}"
+      - "{{ role_path }}/../../scripts/wireguard-keys"
+      - --public
+    stdin: "{{ vault_wireguard_private_keys[inventory_hostname] }}"
+  delegate_to: localhost
+  become: false
+  vars:
+    ansible_connection: local
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  register: wireguard_derived_public
+  changed_when: false
+  check_mode: false
+  no_log: true
+
+- name: Check the private key belongs to this server
+  ansible.builtin.assert:
+    that:
+      - >-
+        wireguard_derived_public.stdout ==
+        (wireguard_peers | selectattr('name', 'equalto', inventory_hostname) | first).public_key
+    fail_msg: >-
+      The private key stored for {{ inventory_hostname }} does not match its
+      public_key in wireguard_peers. See docs/runbooks/setup.md, section "WireGuard".
+    quiet: true
+
 - name: Install WireGuard tools
   ansible.builtin.apt:
     name: wireguard-tools

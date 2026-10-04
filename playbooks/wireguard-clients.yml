@@ -18,6 +18,31 @@
         quiet: true
       no_log: true
 
+    - name: Derive each device's public key from its private key
+      ansible.builtin.command:
+        argv:
+          - "{{ ansible_playbook_python }}"
+          - "{{ playbook_dir }}/../scripts/wireguard-keys"
+          - --public
+        stdin: "{{ vault_wireguard_private_keys[item.name] }}"
+      loop: "{{ wireguard_devices }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: wireguard_derived
+      changed_when: false
+      check_mode: false
+      no_log: true
+
+    - name: Check each device's private key matches its public key
+      ansible.builtin.assert:
+        that:
+          - item.stdout == item.item.public_key
+        fail_msg: "The private key stored for {{ item.item.name }} does not match its public_key in wireguard_peers."
+        quiet: true
+      loop: "{{ wireguard_derived.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
     - name: Create the private config directory
       ansible.builtin.file:
         path: "{{ wireguard_clients_dir }}"
