@@ -60,6 +60,14 @@ Both servers listen on UDP 51820. Devices route only the two server
 addresses through the tunnel and keep it alive every 25 seconds; servers
 forward nothing. See [adr/0006-wireguard-mesh.md](adr/0006-wireguard-mesh.md).
 
+## AtlasRisk data services
+
+On `app01`, Docker runs the Compose project `atlasrisk` from
+`/etc/atlasrisk`: PostgreSQL 18.6 and Garage 2.4.1, pinned by digest, with
+data under `/srv/atlasrisk`. No container publishes a port; services reach
+each other only on the Compose network. See
+[adr/0007-docker-for-app-services.md](adr/0007-docker-for-app-services.md).
+
 ## Firewall
 
 The `firewall` role owns one nftables table, `inet secureedge`, whose
@@ -74,6 +82,10 @@ fresh SSH connection succeeds and cancels it.
 
 Ports published by Docker bypass the `input` chain. Containers must
 therefore publish only on the WireGuard address or `127.0.0.1`.
+
+A `forward` chain drops anything arriving from WireGuard that would be
+routed onward, except DNAT'd traffic to a published container port, so a VPN
+device cannot use the app server as a router.
 
 ## Failure behaviour
 

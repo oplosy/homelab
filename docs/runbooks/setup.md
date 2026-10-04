@@ -136,7 +136,38 @@ Changing a server's own WireGuard address or the port needs
 `sudo systemctl restart wg-quick@wg0` on that server after `site.yml`;
 peer changes apply live.
 
-## 7. Lockout drill (once per server)
+## 7. AtlasRisk data services
+
+PostgreSQL and Garage run on the app server in the Compose project
+`/etc/atlasrisk`, with data in `/srv/atlasrisk` and no published ports.
+Generate their secrets once:
+
+```bash
+openssl rand -base64 36                 # PostgreSQL password
+printf 'GK%s\n' "$(openssl rand -hex 12)"  # Garage access key
+openssl rand -hex 32                     # Garage secret key
+openssl rand -hex 32                     # Garage RPC secret
+```
+
+Add them to the vault:
+
+```bash
+ansible-vault edit inventories/production/group_vars/all/vault.yml
+```
+
+```yaml
+vault_atlasrisk_postgres_password: <PostgreSQL password>
+vault_atlasrisk_garage_access_key: <GK… access key>
+vault_atlasrisk_garage_secret_key: <secret key>
+vault_atlasrisk_garage_rpc_secret: <RPC secret>
+```
+
+Then run `ansible-playbook playbooks/site.yml` and the host checks (§5).
+On the server, `sudo docker compose --project-directory /etc/atlasrisk ps`
+shows both services; `sudo docker compose --project-directory /etc/atlasrisk
+exec postgres psql -U atrisk atrisk` opens a database shell.
+
+## 8. Lockout drill (once per server)
 
 Prove the firewall rolls itself back. This makes SSH reachable only over a
 WireGuard interface that does not exist yet:

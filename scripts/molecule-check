@@ -12,8 +12,12 @@ if [ -z "${ANSIBLE_VAULT_PASSWORD_FILE:-}" ] && [ ! -f "$HOME/.config/secureedge
 fi
 
 ansible-galaxy collection install -r requirements.yml >/dev/null
-trap 'molecule destroy' EXIT
-molecule destroy
+cleanup() {
+  molecule destroy
+  docker volume rm -f secureedge-molecule-docker secureedge-molecule-containerd >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+cleanup
 molecule create
 molecule converge
 molecule idempotence

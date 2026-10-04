@@ -147,3 +147,45 @@ def test_wireguard_accepts_good_input(tmp_path: Path) -> None:
     assert "Check this server's WireGuard private key" in result.stdout
     assert "WireGuard needs" not in result.stdout
     assert EDGE_PRIVATE not in result.stdout + result.stderr
+
+
+GOOD_APP = {
+    "vault_atlasrisk_postgres_password": "qcgMvivvw63LCR2y+qxUcgemeTRVVPKkHQUEjz4GBH1AJ2Kd",
+    "vault_atlasrisk_garage_access_key": "GKcfe3c374687e6e82648563ea",
+    "vault_atlasrisk_garage_secret_key": "d1ddef26ea634b4fbe7d6c5915059c011c15b1f212436bf8ab5d75fc7db49c9a",
+    "vault_atlasrisk_garage_rpc_secret": "5888366774c94c3a719b6408cf3fb9f9aa517f64f85ff7c848ab7560eea49aa9",
+}
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"vault_atlasrisk_postgres_password": ""},
+        {"vault_atlasrisk_postgres_password": "short-password"},
+        {"vault_atlasrisk_postgres_password": "dollar$" + "x" * 40},
+        {"app_service_postgres_image": "postgres:18"},
+        {"vault_atlasrisk_garage_access_key": "GKnot-hex"},
+        {"vault_atlasrisk_garage_secret_key": "abc"},
+        {"vault_atlasrisk_garage_rpc_secret": "5888366774C94C3A719B6408CF3FB9F9AA517F64F85FF7C848AB7560EEA49AA9"},
+    ],
+    ids=["empty-password", "short-password", "dollar-in-password", "unpinned-image",
+         "bad-access-key", "bad-secret-key", "uppercase-rpc-secret"],
+)
+def test_app_service_rejects_bad_input(tmp_path: Path, override: dict) -> None:
+    role_vars = {**GOOD_APP, **override}
+    result = run_role(tmp_path, "app_service", role_vars)
+    assert result.returncode != 0
+    assert "Check AtlasRisk data service settings" in result.stdout
+    assert "Create the AtlasRisk directories" not in result.stdout
+    for key, value in role_vars.items():
+        if key.startswith("vault_") and len(value) >= 8:
+            assert value not in result.stdout + result.stderr
+
+
+def test_app_service_accepts_good_input(tmp_path: Path) -> None:
+    result = run_role(tmp_path, "app_service", GOOD_APP)
+    assert "Check AtlasRisk data service settings" in result.stdout
+    assert "Check AtlasRisk data service secrets" in result.stdout
+    assert "AtlasRisk data services need" not in result.stdout
+    for value in GOOD_APP.values():
+        assert value not in result.stdout + result.stderr

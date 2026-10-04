@@ -43,4 +43,12 @@ table inet secureedge {
 		limit rate 5/minute log prefix "secureedge-drop: "
 {% endif %}
 	}
+
+	# Docker turns IP forwarding on; nothing arriving from WireGuard may be
+	# routed onward except DNAT'd traffic to a published container port.
+	chain forward {
+		type filter hook forward priority filter; policy accept;
+		iifname "{{ firewall_wireguard_interface }}" ct status dnat accept
+		iifname "{{ firewall_wireguard_interface }}" drop
+	}
 }
