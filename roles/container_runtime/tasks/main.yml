@@ -1,0 +1,30 @@
+---
+- name: Install Docker and Compose from Ubuntu
+  ansible.builtin.apt:
+    name:
+      - docker.io
+      - docker-compose-v2
+    state: present
+
+- name: Create the Docker configuration directory
+  ansible.builtin.file:
+    path: /etc/docker
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configure the Docker daemon
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    content: "{{ container_runtime_daemon | to_nice_json }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Docker
+
+- name: Run Docker at boot
+  ansible.builtin.systemd_service:
+    name: docker
+    enabled: true
+    state: started
