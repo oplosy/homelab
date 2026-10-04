@@ -1,0 +1,13 @@
+# SecureEdge WireGuard config for {{ item.name }}. Contains a private key.
+[Interface]
+PrivateKey = {{ vault_wireguard_private_keys[item.name] }}
+Address = {{ item.address }}/32
+{% for server in wireguard_peers | selectattr('kind', 'equalto', 'server') %}
+
+# {{ server.name }}
+[Peer]
+PublicKey = {{ server.public_key }}
+Endpoint = {{ server.endpoint }}:{{ wireguard_port }}
+AllowedIPs = {{ server.address }}/32
+PersistentKeepalive = 25
+{% endfor %}

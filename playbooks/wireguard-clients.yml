@@ -1,0 +1,56 @@
+---
+# Write a WireGuard config for each of the owner's devices, outside the
+# repository, plus a QR code PNG for devices marked qr: true.
+#   ansible-playbook playbooks/wireguard-clients.yml
+- name: Generate WireGuard device configs
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    wireguard_clients_dir: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/secureedge/wireguard"
+    wireguard_devices: "{{ wireguard_peers | selectattr('kind', 'equalto', 'device') | list }}"
+  tasks:
+    - name: Check every device has a private key
+      ansible.builtin.assert:
+        that:
+          - vault_wireguard_private_keys is defined
+          - wireguard_devices | map(attribute='name') | list | difference(vault_wireguard_private_keys.keys() | list) | length == 0
+        quiet: true
+      no_log: true
+
+    - name: Create the private config directory
+      ansible.builtin.file:
+        path: "{{ wireguard_clients_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Write each device config
+      ansible.builtin.template:
+        src: wireguard-device.conf.j2
+        dest: "{{ wireguard_clients_dir }}/{{ item.name }}.conf"
+        mode: "0600"
+      loop: "{{ wireguard_devices }}"
+      loop_control:
+        label: "{{ item.name }}"
+      no_log: true
+
+    - name: Render QR codes for phones
+      ansible.builtin.command:
+        argv:
+          - "{{ ansible_playbook_python }}"
+          - -c
+          - "import segno, sys; segno.make(open(sys.argv[1]).read(), error='m').save(sys.argv[2], scale=8)"
+          - "{{ wireguard_clients_dir }}/{{ item.name }}.conf"
+          - "{{ wireguard_clients_dir }}/{{ item.name }}.png"
+      loop: "{{ wireguard_devices | selectattr('qr', 'defined') | selectattr('qr') | list }}"
+      loop_control:
+        label: "{{ item.name }}"
+      changed_when: true
+
+    - name: Keep the QR codes private
+      ansible.builtin.file:
+        path: "{{ wireguard_clients_dir }}/{{ item.name }}.png"
+        mode: "0600"
+      loop: "{{ wireguard_devices | selectattr('qr', 'defined') | selectattr('qr') | list }}"
+      loop_control:
+        label: "{{ item.name }}"
