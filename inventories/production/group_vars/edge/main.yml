@@ -5,3 +5,11 @@ firewall_allowed:
     proto: udp
     port: 51820
     from: any
+  - name: http
+    proto: tcp
+    port: 80
+    from: any
+  - name: https
+    proto: tcp
+    port: 443
+    from: any
