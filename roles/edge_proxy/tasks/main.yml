@@ -32,6 +32,7 @@
       - nginx
       - libnginx-mod-http-modsecurity
       - modsecurity-crs
+      - logrotate
     state: present
 
 - name: Disable the package's default site

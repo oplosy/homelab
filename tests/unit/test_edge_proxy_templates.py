@@ -169,3 +169,18 @@ def test_audit_log_has_its_own_rotation(tmp_path: Path) -> None:
     rotation = (ROLE / "files" / "secureedge-modsecurity.logrotate").read_text(encoding="utf-8")
     assert rotation.startswith("/var/log/modsecurity/audit.log {")
     assert "copytruncate" in rotation
+
+
+def test_the_auth_subrequest_is_not_inspected_or_size_checked_again(tmp_path: Path) -> None:
+    # The subrequest is a GET that carries the main request's Content-Length:
+    # CRS 920170 would block every POST, and the default 1m limit would turn
+    # an allowed upload into a 413 and the auth check into a 500.
+    auth = block(render(tmp_path, "secureedge.conf.j2"), "location = /_secureedge_auth")
+    assert "modsecurity off;" in auth
+    assert "client_max_body_size 0;" in auth
+
+
+def test_logrotate_is_installed_for_the_audit_log() -> None:
+    tasks = yaml.safe_load((ROLE / "tasks" / "main.yml").read_text(encoding="utf-8"))
+    install = next(task for task in tasks if task["name"] == "Install NGINX, ModSecurity and OWASP CRS")
+    assert "logrotate" in install["ansible.builtin.apt"]["name"]
