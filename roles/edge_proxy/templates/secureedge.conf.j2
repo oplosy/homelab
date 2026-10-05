@@ -26,10 +26,16 @@ server {
     }
 }
 
+# Other SNI names get no handshake. A request that negotiated the app's name
+# but sends another Host lands here too: close it without a response. The
+# protocol list here is what the handshake negotiates.
 server {
     listen 443 ssl default_server;
     listen [::]:443 ssl default_server;
+    server_tokens off;
+    ssl_protocols TLSv1.2 TLSv1.3;
     ssl_reject_handshake on;
+    return 444;
 }
 
 server {
@@ -53,7 +59,6 @@ server {
     add_header Referrer-Policy same-origin always;
     add_header Content-Security-Policy "frame-ancestors 'none'" always;
 
-    client_max_body_size {{ app.max_body }};
     modsecurity on;
     modsecurity_rules_file /etc/nginx/secureedge/modsecurity.conf;
 
@@ -72,15 +77,20 @@ server {
     location {{ app.api_prefix }} {
         auth_request /_secureedge_auth;
         limit_req zone=secureedge_api burst={{ app.rate_limits.api.burst }} nodelay;
+        client_max_body_size {{ app.max_body }};
         proxy_pass http://secureedge_app;
         proxy_connect_timeout 5s;
         proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        # The edge is the first proxy: never pass on a client-supplied chain.
+        proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # Static files need no request body; NGINX rejects a large one before
+    # ModSecurity reads it.
     location / {
         auth_request /_secureedge_auth;
+        client_max_body_size 64k;
         try_files $uri /index.html;
     }
 }

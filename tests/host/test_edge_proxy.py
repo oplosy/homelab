@@ -23,7 +23,7 @@ from support.inventory import group_for
 pytestmark = pytest.mark.host
 
 STUB = "/usr/local/lib/secureedge-test/http_stub.py"
-AUDIT_LOG = "/var/log/nginx/modsec_audit.log"
+AUDIT_LOG = "/var/log/modsecurity/audit.log"
 SQL_INJECTION = "/?id=1%27%20OR%20%27{marker}%27%3D%27{marker}"
 XSS = "/?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E"
 
@@ -164,6 +164,20 @@ def test_unknown_names_get_no_tls_handshake(edge_host) -> None:
     assert no_sni.rc == 35, no_sni.stderr
 
 
+def test_other_host_headers_get_no_page(edge_host, app) -> None:
+    # SNI matches the app, Host does not: NGINX falls back to the default
+    # server, which must not serve anything or reveal its version.
+    domain = app["domain"]
+    result = edge_host.run(shlex.join([
+        "curl", "-sk", "--max-time", "10", "--resolve", f"{domain}:443:127.0.0.1",
+        "-H", "Host: other.invalid", "-D", "-", "-o", "/dev/null", "-w", "\n%{http_code}",
+        f"https://{domain}/",
+    ]))
+    lines = result.stdout.strip().splitlines()
+    assert not lines or not lines[-1].startswith("2"), result.stdout
+    assert "nginx/" not in result.stdout
+
+
 @pytest.mark.parametrize("version", ["1.2", "1.3"])
 def test_tls_versions_are_accepted(edge_host, app, version) -> None:
     domain = app["domain"]
@@ -204,6 +218,21 @@ def test_waf_log_omits_cookies_and_bodies(edge_host, root, app) -> None:
         time.sleep(0.1)
     assert marker in entry
     assert secret not in entry
+
+
+def test_waf_log_survives_rotation(edge_host, root, app) -> None:
+    domain = app["domain"]
+    root("logrotate -f /etc/logrotate.d/secureedge-modsecurity")
+    marker = secrets.token_hex(6)
+    assert status(edge_host, domain, f"https://{domain}{SQL_INJECTION.format(marker=marker)}") == 403
+    text = ""
+    for _ in range(50):
+        text = root(f"cat {AUDIT_LOG}")
+        if marker in text:
+            break
+        time.sleep(0.1)
+    assert marker in text
+    assert root("stat -c '%U %G %a' /var/log/modsecurity") == "root adm 750"
 
 
 def test_api_requests_are_rate_limited(edge_host, app) -> None:

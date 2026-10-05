@@ -8,10 +8,12 @@ SecRuleEngine On
 SecRequestBodyLimit {{ bytes }}
 SecRequestBodyNoFilesLimit {{ bytes }}
 SecAuditEngine RelevantOnly
-# Audit header and matched rules only: no request headers (cookies), no
-# request or response bodies.
+# Audit header and matched rules only: no request headers or bodies. A value
+# that triggers a rule is logged with that rule, so the directory is
+# root:adm 0750. Its own logrotate stanza uses copytruncate, because
+# libmodsecurity keeps the file open across NGINX's log reopen.
 SecAuditLogParts AHZ
-SecAuditLog /var/log/nginx/modsec_audit.log
+SecAuditLog /var/log/modsecurity/audit.log
 
 Include /etc/modsecurity/crs/crs-setup.conf
 SecAction "id:900000,phase:1,pass,t:none,nolog,setvar:tx.paranoia_level={{ edge_proxy_crs_paranoia }}"

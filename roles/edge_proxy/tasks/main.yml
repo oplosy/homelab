@@ -51,6 +51,23 @@
     - /etc/nginx/secureedge
     - "{{ edge_proxy_web_root }}"
 
+# Matched values can land in the audit log: keep it from ordinary users.
+- name: Create the ModSecurity audit log directory
+  ansible.builtin.file:
+    path: /var/log/modsecurity
+    state: directory
+    owner: root
+    group: adm
+    mode: "0750"
+
+- name: Rotate the ModSecurity audit log
+  ansible.builtin.copy:
+    src: secureedge-modsecurity.logrotate
+    dest: /etc/logrotate.d/secureedge-modsecurity
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: Write the ModSecurity rules file
   ansible.builtin.template:
     src: modsecurity.conf.j2

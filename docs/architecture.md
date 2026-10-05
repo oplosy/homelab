@@ -78,8 +78,12 @@ port 80). Each application request passes, in order: ModSecurity with OWASP
 CRS 3.3 (blocking, paranoia level 1), the API rate limit (`429` beyond the
 burst), the `auth_request` check against `127.0.0.1:4180`, then either the
 static web root or the AtlasRisk upstream over WireGuard. Names other than
-the application's get no TLS handshake. The WAF audit log keeps the matched
-rules only, never cookies or bodies. See
+the application's get no TLS handshake, and a request for another Host is
+closed without a response. Only the API accepts large bodies; other routes
+take at most 64 KiB. The WAF audit log (`/var/log/modsecurity/audit.log`,
+readable by root and `adm` only) keeps the matched rules, never request
+headers or bodies as such; a value that triggers a rule is logged with it.
+See
 [adr/0008-edge-stack-from-ubuntu-packages.md](adr/0008-edge-stack-from-ubuntu-packages.md).
 
 ## Firewall

@@ -131,3 +131,41 @@ def test_tls_and_edge_proxy_agree_on_paths() -> None:
     edge = yaml.safe_load((ROLE / "defaults" / "main.yml").read_text(encoding="utf-8"))
     assert edge["edge_proxy_tls_dir"] == tls["tls_dir"]
     assert edge["edge_proxy_acme_webroot"] == tls["tls_webroot"]
+
+
+def server_blocks(text: str) -> list[str]:
+    blocks, rest = [], text
+    while "server {" in rest:
+        body = block(rest, "server")
+        blocks.append(body)
+        rest = rest[rest.index(body) + len(body):]
+    return blocks
+
+
+def test_other_host_names_get_no_page_and_no_version(tmp_path: Path) -> None:
+    text = render(tmp_path, "secureedge.conf.j2")
+    reject = next(body for body in server_blocks(text) if "ssl_reject_handshake on;" in body)
+    assert "return 444;" in reject
+    assert "server_tokens off;" in reject
+    assert "ssl_protocols TLSv1.2 TLSv1.3;" in reject
+
+
+def test_forwarded_for_is_the_client_address_only(tmp_path: Path) -> None:
+    api = block(render(tmp_path, "secureedge.conf.j2"), "location /api/")
+    assert "proxy_set_header X-Forwarded-For $remote_addr;" in api
+    assert "$proxy_add_x_forwarded_for" not in api
+
+
+def test_only_the_api_accepts_large_bodies(tmp_path: Path) -> None:
+    text = render(tmp_path, "secureedge.conf.j2")
+    app_server = text.split("server_name atlasrisk.example.com;", 1)[1]
+    assert "client_max_body_size 64k;" in block(app_server, "location /")
+    assert "client_max_body_size 12m;" in block(text, "location /api/")
+
+
+def test_audit_log_has_its_own_rotation(tmp_path: Path) -> None:
+    text = render(tmp_path, "modsecurity.conf.j2")
+    assert "SecAuditLog /var/log/modsecurity/audit.log" in text
+    rotation = (ROLE / "files" / "secureedge-modsecurity.logrotate").read_text(encoding="utf-8")
+    assert rotation.startswith("/var/log/modsecurity/audit.log {")
+    assert "copytruncate" in rotation
