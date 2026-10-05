@@ -23,17 +23,27 @@
         group: root
         mode: "0755"
 
+    # Python's ssl verifies strictly (VERIFY_X509_STRICT): the CA needs key
+    # usage, and the server certificate needs key identifiers and key usage.
     - name: Create Pebble's test CA and server certificate
       ansible.builtin.shell: |
         set -eu
         cd /etc/pebble
         openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
-          -days 30 -subj "/CN=SecureEdge Molecule test CA" -keyout ca.key -out ca.pem
+          -days 30 -subj "/CN=SecureEdge Molecule test CA" -keyout ca.key -out ca.pem \
+          -addext "basicConstraints=critical,CA:TRUE" \
+          -addext "keyUsage=critical,keyCertSign,cRLSign"
         openssl req -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
           -subj "/CN=localhost" -keyout key.pem -out server.csr
-        printf 'subjectAltName=DNS:localhost,IP:127.0.0.1\n' > san.ext
+        printf '%s\n' \
+          'subjectAltName=DNS:localhost,IP:127.0.0.1' \
+          'basicConstraints=critical,CA:FALSE' \
+          'keyUsage=critical,digitalSignature' \
+          'extendedKeyUsage=serverAuth' \
+          'subjectKeyIdentifier=hash' \
+          'authorityKeyIdentifier=keyid' > server.ext
         openssl x509 -req -in server.csr -CA ca.pem -CAkey ca.key -CAcreateserial \
-          -days 30 -extfile san.ext -out cert.pem
+          -days 30 -extfile server.ext -out cert.pem
       args:
         executable: /bin/bash
         creates: /etc/pebble/cert.pem
