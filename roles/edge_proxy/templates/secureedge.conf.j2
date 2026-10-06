@@ -2,9 +2,27 @@
 # application host: ModSecurity (rewrite and pre-access phases), the API
 # rate limit (pre-access), auth_request (access), then the content.
 {% set app = secureedge_app %}
+{% set oauth2_upstream = edge_proxy_auth_url | regex_replace('^(http://[^/]+)/.*$', '\\1') %}
 
 limit_req_zone $binary_remote_addr zone=secureedge_api:10m rate={{ app.rate_limits.api.rate }};
 limit_req_status 429;
+
+# Cross-site request protection for the API: state-changing methods need
+# this site's Origin and, when the browser sends it, Sec-Fetch-Site:
+# same-origin. GET, HEAD and OPTIONS are not checked.
+map $request_method $secureedge_unsafe_method {
+    default 1;
+    GET 0;
+    HEAD 0;
+    OPTIONS 0;
+}
+
+map "$secureedge_unsafe_method|$http_origin|$http_sec_fetch_site" $secureedge_cross_site {
+    default 1;
+    "~^0\|" 0;
+    "1|https://{{ app.domain }}|same-origin" 0;
+    "1|https://{{ app.domain }}|" 0;
+}
 
 upstream secureedge_app {
     server {{ app.upstream.address }}:{{ app.upstream.port }};
@@ -79,7 +97,20 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # oauth2-proxy's login flow (start, callback, sign_out). No auth check:
+    # signing in must work without a session.
+    location /oauth2/ {
+        proxy_pass {{ oauth2_upstream }};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     location {{ app.api_prefix }} {
+        if ($secureedge_cross_site) {
+            return 403;
+        }
         auth_request /_secureedge_auth;
         limit_req zone=secureedge_api burst={{ app.rate_limits.api.burst }} nodelay;
         client_max_body_size {{ app.max_body }};
@@ -89,13 +120,26 @@ server {
         # The edge is the first proxy: never pass on a client-supplied chain.
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
+        # AtlasRisk trusts no identity header and needs no cookie: never let a
+        # client-supplied identity or the session cookie reach it.
+{% for header in ['Authorization', 'Cookie', 'X-Forwarded-User', 'X-Forwarded-Email',
+                  'X-Forwarded-Preferred-Username', 'X-Forwarded-Groups', 'X-Forwarded-Access-Token',
+                  'X-Auth-Request-User', 'X-Auth-Request-Email', 'X-Auth-Request-Preferred-Username',
+                  'X-Auth-Request-Groups', 'X-Auth-Request-Access-Token'] %}
+        proxy_set_header {{ header }} "";
+{% endfor %}
     }
 
     # Static files need no request body; NGINX rejects a large one before
-    # ModSecurity reads it.
+    # ModSecurity reads it. Without a session, browsers go to the login.
     location / {
         auth_request /_secureedge_auth;
+        error_page 401 = @secureedge_login;
         client_max_body_size 64k;
         try_files $uri /index.html;
+    }
+
+    location @secureedge_login {
+        return 302 /oauth2/start?rd=$request_uri;
     }
 }
