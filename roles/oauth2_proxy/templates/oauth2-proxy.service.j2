@@ -1,0 +1,22 @@
+# Managed by SecureEdge (role oauth2_proxy).
+[Unit]
+Description=oauth2-proxy (SecureEdge login)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=oauth2-proxy
+Group=oauth2-proxy
+EnvironmentFile=/etc/oauth2-proxy/oauth2-proxy.env
+ExecStart=/usr/local/bin/oauth2-proxy --config=/etc/oauth2-proxy/oauth2-proxy.cfg
+Restart=on-failure
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

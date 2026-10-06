@@ -27,3 +27,10 @@ secureedge_app:
     api:
       rate: 10r/s
       burst: 20
+
+# Who may sign in through oauth2-proxy (GitHub usernames). The OAuth App's
+# client id and secret and the cookie secret are in the vault:
+# docs/runbooks/setup.md, section "Login (GitHub)".
+secureedge_auth:
+  github_users:
+    - oplosy

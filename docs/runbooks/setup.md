@@ -35,10 +35,10 @@ points at edge01:
 
 Applying the `tls` role accepts the Let's Encrypt subscriber agreement.
 Until a certificate is issued, NGINX serves a placeholder certificate and
-browsers show a certificate error. Until `oauth2_proxy` is deployed, every
-application request answers `500` by design: nothing is forwarded without
-a login. Changing the domain later issues a new certificate on the next
-run.
+browsers show a certificate error. The edge run also needs the login
+values from §9; until they are in the vault, the `oauth2_proxy` role stops
+and points there. Changing the domain later issues a new certificate on the
+next run.
 
 ## 3. Create the vault
 
@@ -189,7 +189,43 @@ On the server, `sudo docker compose --project-directory /etc/atlasrisk ps`
 shows both services; `sudo docker compose --project-directory /etc/atlasrisk
 exec postgres psql -U atrisk atrisk` opens a database shell.
 
-## 9. Lockout drill (once per server)
+## 9. Login (GitHub)
+
+Only the GitHub accounts in `secureedge_auth.github_users` can sign in.
+Multi-factor authentication comes from GitHub, so turn on two-factor
+authentication for those accounts first.
+
+1. On GitHub: Settings → Developer settings → OAuth Apps → New OAuth App.
+   Homepage `https://<domain>`, authorization callback
+   `https://<domain>/oauth2/callback`. Generate a client secret.
+2. Generate the cookie secret:
+
+```bash
+openssl rand -base64 32 | tr -- '+/' '-_'
+```
+
+3. Add the values to the vault:
+
+```bash
+ansible-vault edit inventories/production/group_vars/all/vault.yml
+```
+
+```yaml
+vault_oauth2_proxy_client_id: <client ID>
+vault_oauth2_proxy_client_secret: <client secret>
+vault_oauth2_proxy_cookie_secret: <cookie secret>
+```
+
+4. Apply (`ansible-playbook playbooks/site.yml`) and check by hand:
+   open `https://<domain>/` in a private window; you are sent to GitHub and
+   back to the app. Signing in with another GitHub account is refused.
+   `https://<domain>/oauth2/sign_out` ends the session.
+
+Sessions last seven days. To run the authenticated external checks, copy
+the `__Host-secureedge` cookie's value from the browser into
+`SECUREEDGE_SESSION_COOKIE`.
+
+## 10. Lockout drill (once per server)
 
 Prove the firewall rolls itself back. This makes SSH reachable only over a
 WireGuard interface that does not exist yet:

@@ -184,3 +184,44 @@ def test_logrotate_is_installed_for_the_audit_log() -> None:
     tasks = yaml.safe_load((ROLE / "tasks" / "main.yml").read_text(encoding="utf-8"))
     install = next(task for task in tasks if task["name"] == "Install NGINX, ModSecurity and OWASP CRS")
     assert "logrotate" in install["ansible.builtin.apt"]["name"]
+
+
+def app_server(text: str) -> str:
+    return text.split("server_name atlasrisk.example.com;", 1)[1]
+
+
+def test_login_flow_is_proxied_without_the_auth_check(tmp_path: Path) -> None:
+    oauth2 = block(app_server(render(tmp_path, "secureedge.conf.j2")), "location /oauth2/")
+    assert "proxy_pass http://127.0.0.1:4180;" in oauth2
+    assert "auth_request" not in oauth2
+    assert "proxy_set_header X-Forwarded-For $remote_addr;" in oauth2
+
+
+def test_browsers_without_a_session_are_sent_to_login_but_the_api_is_not(tmp_path: Path) -> None:
+    server = app_server(render(tmp_path, "secureedge.conf.j2"))
+    assert "error_page 401 = @secureedge_login;" in block(server, "location /")
+    assert "return 302 /oauth2/start?rd=$request_uri;" in block(server, "location @secureedge_login")
+    assert "error_page" not in block(server, "location /api/")
+
+
+def test_state_changing_api_calls_need_this_sites_origin(tmp_path: Path) -> None:
+    text = render(tmp_path, "secureedge.conf.j2")
+    methods = block(text, "map $request_method $secureedge_unsafe_method")
+    for line in ("default 1;", "GET 0;", "HEAD 0;", "OPTIONS 0;"):
+        assert line in methods
+    cross = block(text, 'map "$secureedge_unsafe_method|$http_origin|$http_sec_fetch_site" $secureedge_cross_site')
+    assert "default 1;" in cross
+    assert '"1|https://atlasrisk.example.com|same-origin" 0;' in cross
+    assert '"1|https://atlasrisk.example.com|" 0;' in cross
+    api = block(text, "location /api/")
+    assert "if ($secureedge_cross_site) {" in api
+    assert api.index("if ($secureedge_cross_site)") < api.index("proxy_pass")
+
+
+def test_identity_headers_and_cookies_are_not_sent_upstream(tmp_path: Path) -> None:
+    api = block(render(tmp_path, "secureedge.conf.j2"), "location /api/")
+    for header in ("Authorization", "Cookie", "X-Forwarded-User", "X-Forwarded-Email",
+                   "X-Forwarded-Preferred-Username", "X-Forwarded-Groups", "X-Forwarded-Access-Token",
+                   "X-Auth-Request-User", "X-Auth-Request-Email", "X-Auth-Request-Preferred-Username",
+                   "X-Auth-Request-Groups", "X-Auth-Request-Access-Token"):
+        assert f'proxy_set_header {header} "";' in api

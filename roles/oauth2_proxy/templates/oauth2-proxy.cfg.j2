@@ -1,0 +1,27 @@
+# Managed by SecureEdge (role oauth2_proxy). No secrets here: the client id,
+# client secret and cookie secret come from oauth2-proxy.env.
+provider = "github"
+github_users = {{ secureedge_auth.github_users | to_json }}
+# GitHub provider: every login reads /user/orgs, /user/teams and /user/emails,
+# so read:user alone fails at the callback. No repository access.
+scope = "user:email read:org"
+email_domains = ["*"]
+
+http_address = "{{ oauth2_proxy_listen }}"
+reverse_proxy = true
+redirect_url = "https://{{ secureedge_app.domain }}/oauth2/callback"
+whitelist_domains = ["{{ secureedge_app.domain }}"]
+skip_provider_button = true
+
+cookie_name = "__Host-secureedge"
+cookie_secure = true
+cookie_httponly = true
+cookie_samesite = "lax"
+cookie_expire = "{{ oauth2_proxy_cookie_expire }}"
+
+# Only the auth check and the login flow: nothing is proxied and no
+# identity or token is passed on.
+upstreams = ["static://202"]
+set_xauthrequest = false
+pass_access_token = false
+pass_user_headers = false

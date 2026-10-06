@@ -27,10 +27,13 @@ Databases, object storage, and management interfaces stay private.
    serves ACME challenges and redirects to HTTPS.
 2. ModSecurity with OWASP CRS inspects the request.
 3. NGINX asks oauth2-proxy (localhost only) whether the session is valid.
-   Until oauth2-proxy is deployed, nothing answers there and NGINX returns
-   500 for every application request.
+   oauth2-proxy accepts only the GitHub accounts in
+   `secureedge_auth.github_users`; if it is down, NGINX returns 500 for every
+   application request.
    Without a valid session, browser routes redirect to login and API routes
-   get 401.
+   get 401. State-changing API requests (POST, PUT, PATCH, DELETE) must come
+   from the site itself (`Origin`, `Sec-Fetch-Site`); others get 403 before
+   the login check.
 4. API routes have rate limits; excess requests get 429.
 5. NGINX forwards to AtlasRisk on `app01` through the WireGuard tunnel.
 
@@ -85,6 +88,9 @@ readable by root and `adm` only) keeps the matched rules, never request
 headers or bodies as such; a value that triggers a rule is logged with it.
 See
 [adr/0008-edge-stack-from-ubuntu-packages.md](adr/0008-edge-stack-from-ubuntu-packages.md).
+oauth2-proxy runs as a sandboxed service on `127.0.0.1:4180`; identity
+headers and cookies are stripped before AtlasRisk. See
+[adr/0009-oauth2-proxy-with-github.md](adr/0009-oauth2-proxy-with-github.md).
 
 ## Firewall
 
@@ -117,5 +123,5 @@ device cannot use the app server as a router.
 ## Decisions
 
 See [adr/](adr/0001-ansible-for-configuration.md). Open choices (VPS provider,
-container runtime, identity provider, backup and monitoring
+container runtime, backup and monitoring
 tools) are listed in the layout spec and get an ADR when decided.

@@ -260,3 +260,53 @@ def test_edge_proxy_accepts_good_input(tmp_path: Path) -> None:
     result = run_role(tmp_path, "edge_proxy", app_with())
     assert "Check edge proxy settings" in result.stdout
     assert "edge_proxy needs" not in result.stdout
+
+
+GOOD_OAUTH2 = {
+    **app_with(),
+    "secureedge_auth": {"github_users": ["oplosy"]},
+    "vault_oauth2_proxy_client_id": "Ov23liMoleculeTestOnly",
+    "vault_oauth2_proxy_client_secret": "894430f2e4b69fd7f10a9f386a34d26fae098b01",
+    "vault_oauth2_proxy_cookie_secret": "BXc15pnsmEuNf2xi1U5J-ugUAuQHUPlLL4UfBfnFU7Q=",
+}
+
+
+def oauth2_with(**changes: object) -> dict:
+    return {**GOOD_OAUTH2, **changes}
+
+
+@pytest.mark.parametrize(
+    "role_vars",
+    [
+        oauth2_with(oauth2_proxy_version="latest"),
+        oauth2_with(oauth2_proxy_sha256="abc"),
+        oauth2_with(oauth2_proxy_listen="0.0.0.0:4180"),
+        oauth2_with(secureedge_auth={"github_users": []}),
+        oauth2_with(secureedge_auth={"github_users": "oplosy"}),
+        oauth2_with(secureedge_auth={"github_users": ["bad user"]}),
+        {k: v for k, v in GOOD_OAUTH2.items() if k != "vault_oauth2_proxy_client_secret"},
+        oauth2_with(vault_oauth2_proxy_client_id="short"),
+        oauth2_with(vault_oauth2_proxy_client_secret="not-hex-" + "x" * 32),
+        oauth2_with(vault_oauth2_proxy_cookie_secret="too-short"),
+    ],
+    ids=["version", "checksum", "public-listen", "no-users", "users-as-string", "bad-username",
+         "missing-secret", "short-client-id", "bad-client-secret", "short-cookie-secret"],
+)
+def test_oauth2_proxy_rejects_bad_input(tmp_path: Path, role_vars: dict) -> None:
+    result = run_role(tmp_path, "oauth2_proxy", role_vars)
+    assert result.returncode != 0
+    assert "Check oauth2-proxy settings" in result.stdout
+    assert "Create the oauth2-proxy group" not in result.stdout
+    for key, value in role_vars.items():
+        if key.startswith("vault_") and len(value) >= 8:
+            assert value not in result.stdout + result.stderr
+
+
+def test_oauth2_proxy_accepts_good_input(tmp_path: Path) -> None:
+    result = run_role(tmp_path, "oauth2_proxy", GOOD_OAUTH2)
+    assert "Check oauth2-proxy settings" in result.stdout
+    assert "Check oauth2-proxy secrets" in result.stdout
+    assert "oauth2_proxy needs" not in result.stdout
+    for key, value in GOOD_OAUTH2.items():
+        if key.startswith("vault_"):
+            assert value not in result.stdout + result.stderr
