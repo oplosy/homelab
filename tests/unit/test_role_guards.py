@@ -356,3 +356,36 @@ def test_backup_accepts_a_local_repository_without_r2(tmp_path: Path) -> None:
     result = run_role(tmp_path, "backup", role_vars)
     assert "Check backup settings" in result.stdout
     assert "backup needs" not in result.stdout
+
+
+GOOD_MONITORING = {
+    "vault_monitoring_ntfy_topic": "se-alerts-0123456789abcdefghijklmn",
+    "wireguard_peers": [{"name": "localhost", "kind": "server", "address": "10.8.0.1"}],
+}
+
+
+@pytest.mark.parametrize(
+    "role_vars",
+    [
+        {k: v for k, v in GOOD_MONITORING.items() if k != "vault_monitoring_ntfy_topic"},
+        {**GOOD_MONITORING, "vault_monitoring_ntfy_topic": "short"},
+        {**GOOD_MONITORING, "vault_monitoring_ntfy_topic": "has spaces in it and is long enough"},
+        {**GOOD_MONITORING, "monitoring_ntfy_server": "http://ntfy.sh"},
+        {**GOOD_MONITORING, "monitoring_disk_max_percent": 100},
+    ],
+    ids=["no-topic", "short-topic", "bad-topic", "plain-http-server", "disk-threshold"],
+)
+def test_monitoring_rejects_bad_input(tmp_path: Path, role_vars: dict) -> None:
+    result = run_role(tmp_path, "monitoring", role_vars)
+    assert result.returncode != 0
+    assert "Check monitoring settings" in result.stdout
+    assert "Install the monitoring script" not in result.stdout
+    topic = role_vars.get("vault_monitoring_ntfy_topic", "")
+    if len(topic) >= 8:
+        assert topic not in result.stdout + result.stderr
+
+
+def test_monitoring_accepts_a_local_test_server(tmp_path: Path) -> None:
+    result = run_role(tmp_path, "monitoring", {**GOOD_MONITORING, "monitoring_ntfy_server": "http://127.0.0.1:8099"})
+    assert "Check monitoring settings" in result.stdout
+    assert "monitoring needs" not in result.stdout

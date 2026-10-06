@@ -1,0 +1,130 @@
+#!/bin/bash
+# Managed by SecureEdge (role monitoring). Checks this server:
+#   sudo secureedge-status            # print problems; exit 1 if there are any
+#   secureedge-monitor --notify       # from secureedge-monitor.timer: send a
+#                                     # ntfy alert when the problems change
+# Alerts name the failed check only: no logs, secrets or financial data.
+set -uo pipefail
+
+problems=()
+problem() { problems+=("$*"); }
+{% raw %}
+
+check_disk() {  # mount max-percent
+  local used
+  used=$(df --output=pcent "$1" | tail -n 1 | tr -dc 0-9)
+  if (( used > $2 )); then problem "disk $1 is ${used}% full"; fi
+}
+
+check_memory() {  # min-free-percent
+  local total avail
+  total=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)
+  avail=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)
+  if (( avail * 100 < total * $1 )); then
+    problem "memory: only $(( avail * 100 / total ))% available"
+  fi
+}
+
+check_load() {  # max-per-cpu
+  local load cpus
+  read -r _ _ load _ < /proc/loadavg
+  cpus=$(nproc)
+  if awk -v l="$load" -v c="$cpus" -v m="$1" 'BEGIN { exit !(l > c * m) }'; then
+    problem "15-minute load is $load on $cpus CPUs"
+  fi
+}
+
+check_failed_units() {
+  local units
+  units=$(systemctl --failed --no-legend --plain | awk '{print $1}' | paste -sd ' ')
+  if [[ -n $units ]]; then problem "failed units: $units"; fi
+}
+
+check_service() {  # unit
+  systemctl is-active --quiet "$1" || problem "service $1 is not running"
+}
+
+check_peer() {  # name wireguard-address
+  ping -c 2 -W 2 -q "$2" >/dev/null 2>&1 || problem "server $1 ($2) does not answer over WireGuard"
+}
+
+check_certificate() {  # path min-days
+  local issuer subject
+  if [[ ! -r $1 ]]; then problem "TLS certificate $1 is missing"; return; fi
+  openssl x509 -in "$1" -noout -checkend $(( $2 * 86400 )) >/dev/null \
+    || problem "TLS certificate expires within $2 days"
+  issuer=$(openssl x509 -in "$1" -noout -issuer | cut -d= -f2-)
+  subject=$(openssl x509 -in "$1" -noout -subject | cut -d= -f2-)
+  if [[ $issuer == "$subject" ]]; then problem "TLS certificate is still the self-signed placeholder"; fi
+}
+
+check_containers() {  # compose-dir
+  local service id health
+  for service in $(docker compose --project-directory "$1" config --services); do
+    id=$(docker compose --project-directory "$1" ps -q "$service")
+    if [[ -z $id ]]; then problem "container $service is not running"; continue; fi
+    health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$id")
+    if [[ $health != healthy && $health != running ]]; then problem "container $service is $health"; fi
+  done
+}
+
+check_backup() {  # state-dir max-age-hours
+  local last now
+  now=$(date +%s)
+  if [[ -r $1/last-success ]]; then
+    last=$(date -d "$(cat "$1/last-success")" +%s)
+  else
+    last=$(stat -c %Y "$1")  # never succeeded yet: count from setup
+  fi
+  if (( now - last > $2 * 3600 )); then problem "no successful backup for over $2 hours"; fi
+}
+{% endraw %}
+
+check_disk / {{ monitoring_disk_max_percent }}
+check_memory {{ monitoring_memory_min_free_percent }}
+check_load {{ monitoring_load_per_cpu_max }}
+check_failed_units
+{% for peer in wireguard_peers if peer.kind == 'server' and peer.name != inventory_hostname %}
+check_peer {{ peer.name }} {{ peer.address }}
+{% endfor %}
+{% if 'edge' in group_names %}
+check_service nginx
+check_service oauth2-proxy
+check_certificate {{ monitoring_tls_certificate }} {{ monitoring_cert_min_days }}
+{% endif %}
+{% if 'app' in group_names %}
+check_service docker
+check_containers {{ monitoring_compose_dir }}
+check_backup {{ monitoring_backup_state_dir }} {{ monitoring_backup_max_age_hours }}
+{% endif %}
+{% raw %}
+
+if (( ${#problems[@]} == 0 )); then
+  current=""
+else
+  current=$(printf '%s\n' "${problems[@]}")
+fi
+
+if [[ ${1:-} != --notify ]]; then
+  if [[ -z $current ]]; then echo "OK: no problems"; exit 0; fi
+  echo "$current"
+  exit 1
+fi
+
+state_file=/var/lib/secureedge/monitoring/problems
+previous=$(cat "$state_file" 2>/dev/null || true)
+if [[ "$current" == "$previous" ]]; then exit 0; fi
+
+. /etc/secureedge/monitoring/ntfy.env
+host=$(hostname)
+if [[ -z $current ]]; then
+  title="SecureEdge $host: all clear"; body="All checks pass again."; tags=white_check_mark; priority=default
+else
+  title="SecureEdge $host: $(grep -c . <<<"$current") problem(s)"; body=$current; tags=warning; priority=high
+fi
+# Only remember the new state once ntfy has accepted it, so a failed send
+# is retried on the next run.
+curl -fsS -m 15 -H "Title: $title" -H "Tags: $tags" -H "Priority: $priority" \
+  --data-binary "$body" "$NTFY_URL" >/dev/null || exit 1
+printf '%s' "$current" > "$state_file"
+{% endraw %}

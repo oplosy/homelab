@@ -1,0 +1,9 @@
+# Managed by SecureEdge (role monitoring).
+[Unit]
+Description=Check this server and alert on changes (SecureEdge)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/secureedge-monitor --notify

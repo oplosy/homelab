@@ -1,0 +1,87 @@
+---
+- name: Check monitoring settings
+  ansible.builtin.assert:
+    that:
+      - monitoring_ntfy_server is match('^(https://[A-Za-z0-9.-]+(:[0-9]{1,5})?|http://127\.0\.0\.1:[0-9]{1,5})$')
+      - monitoring_disk_max_percent | int >= 1
+      - monitoring_disk_max_percent | int <= 99
+      - monitoring_memory_min_free_percent | int >= 1
+      - monitoring_memory_min_free_percent | int <= 50
+      - monitoring_load_per_cpu_max | float > 0
+      - monitoring_cert_min_days | int >= 1
+      - monitoring_backup_max_age_hours | int >= 1
+      - wireguard_peers is defined
+      - vault_monitoring_ntfy_topic is defined
+    fail_msg: >-
+      monitoring needs an https ntfy server (or http://127.0.0.1 for tests),
+      sane thresholds, wireguard_peers, and vault_monitoring_ntfy_topic. See
+      docs/runbooks/setup.md, section "Alerts".
+    quiet: true
+
+# Anyone who knows the topic can read the alerts: it must be long and random.
+- name: Check the ntfy topic
+  ansible.builtin.assert:
+    that:
+      - vault_monitoring_ntfy_topic is match('^[A-Za-z0-9_-]{24,64}$')
+    quiet: true
+  no_log: true
+
+- name: Install the tools the checks use
+  ansible.builtin.apt:
+    name:
+      - curl
+      - openssl
+      - iputils-ping
+    state: present
+
+- name: Create the monitoring directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - /etc/secureedge/monitoring
+    - /var/lib/secureedge/monitoring
+
+- name: Write the ntfy address
+  ansible.builtin.template:
+    src: ntfy.env.j2
+    dest: /etc/secureedge/monitoring/ntfy.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Install the monitoring script
+  ansible.builtin.template:
+    src: secureedge-monitor.j2
+    dest: /usr/local/sbin/secureedge-monitor
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Offer the checks as secureedge-status
+  ansible.builtin.file:
+    src: /usr/local/sbin/secureedge-monitor
+    dest: /usr/local/sbin/secureedge-status
+    state: link
+
+- name: Install the monitoring service and timer
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - secureedge-monitor.service
+    - secureedge-monitor.timer
+
+- name: Run the checks every five minutes
+  ansible.builtin.systemd_service:
+    name: secureedge-monitor.timer
+    enabled: true
+    state: started
+    daemon_reload: true

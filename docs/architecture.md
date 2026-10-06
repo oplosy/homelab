@@ -83,6 +83,16 @@ a snapshot and moves the current data aside instead of deleting it. See
 [adr/0010-restic-backups-to-r2.md](adr/0010-restic-backups-to-r2.md) and
 [runbooks/restore.md](runbooks/restore.md).
 
+## Monitoring
+
+Both servers run `secureedge-monitor` every five minutes. It checks disk,
+memory, load, failed units, and the other server over WireGuard. On edge01
+it also checks NGINX, oauth2-proxy and the certificate. On app01 it also
+checks Docker, the AtlasRisk containers and the backup age. When the set
+of problems changes, it sends one ntfy push alert that names the checks,
+never logs or data. See
+[adr/0011-self-checks-with-ntfy-alerts.md](adr/0011-self-checks-with-ntfy-alerts.md).
+
 ## Edge proxy
 
 On `edge01`, NGINX serves `secureedge_app.domain` with a Let's Encrypt
@@ -132,6 +142,5 @@ device cannot use the app server as a router.
 
 ## Decisions
 
-See [adr/](adr/0001-ansible-for-configuration.md). Open choices (VPS provider,
-container runtime and monitoring
-tools) are listed in the layout spec and get an ADR when decided.
+See [adr/](adr/0001-ansible-for-configuration.md). The VPS provider is the
+remaining open choice from the layout spec.

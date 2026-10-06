@@ -36,7 +36,7 @@ points at edge01:
 Applying the `tls` role accepts the Let's Encrypt subscriber agreement.
 Until a certificate is issued, NGINX serves a placeholder certificate and
 browsers show a certificate error. The edge run also needs the login
-values from §10; until they are in the vault, the `oauth2_proxy` role stops
+values from §11; until they are in the vault, the `oauth2_proxy` role stops
 and points there. Changing the domain later issues a new certificate on the
 next run.
 
@@ -236,7 +236,40 @@ ansible-playbook playbooks/backup.yml
 Restoring is described in [restore.md](restore.md). Run the restore drill
 there once and record it in [evidence/README.md](../evidence/README.md).
 
-## 10. Login (GitHub)
+## 10. Alerts (ntfy)
+
+Both servers check themselves every five minutes and send an ntfy push
+notification when the set of problems changes (and "all clear" when it is
+empty again). The checks are:
+
+- disk, memory and load;
+- failed systemd units;
+- the other server over WireGuard;
+- on edge01: NGINX, oauth2-proxy, and the certificate (not expiring within
+  14 days, not the placeholder);
+- on app01: Docker, the AtlasRisk containers, and a successful backup in the
+  last 26 hours.
+
+Alerts name the failed check only, never logs or data.
+
+1. Install the ntfy app on your phone.
+2. Generate a topic name. Anyone who knows it can read the alerts, so keep
+   it long and random:
+
+```bash
+printf 'se-%s\n' "$(openssl rand -hex 16)"
+```
+
+3. In the app, subscribe to that topic on `ntfy.sh`.
+4. Add it to the vault and apply:
+
+```yaml
+vault_monitoring_ntfy_topic: <topic>
+```
+
+On a server, `sudo secureedge-status` prints the current problems.
+
+## 11. Login (GitHub)
 
 Only the GitHub accounts in `secureedge_auth.github_users` can sign in.
 Multi-factor authentication comes from GitHub, so turn on two-factor
@@ -272,7 +305,7 @@ Sessions last seven days. To run the authenticated external checks, copy
 the `__Host-secureedge` cookie's value from the browser into
 `SECUREEDGE_SESSION_COOKIE`.
 
-## 11. Lockout drill (once per server)
+## 12. Lockout drill (once per server)
 
 Prove the firewall rolls itself back. This makes SSH reachable only over a
 WireGuard interface that does not exist yet:
