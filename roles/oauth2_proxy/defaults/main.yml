@@ -1,0 +1,8 @@
+---
+oauth2_proxy_version: 7.15.5
+# sha256 of oauth2-proxy-v<version>.linux-amd64.tar.gz, from the release's
+# .tar.gz-sha256sum.txt. Change both together.
+oauth2_proxy_sha256: f63f94bf72c5f46ab002a0a275aa8b3cf19b4d828aed08a13978cb9a62c3a1fd
+# Must match edge_proxy_auth_url's address (tests/unit/test_oauth2_proxy_templates.py).
+oauth2_proxy_listen: 127.0.0.1:4180
+oauth2_proxy_cookie_expire: 168h

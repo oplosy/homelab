@@ -1,0 +1,127 @@
+---
+- name: Check oauth2-proxy settings
+  ansible.builtin.assert:
+    that:
+      - oauth2_proxy_version | string is match('^[0-9]+\.[0-9]+\.[0-9]+$')
+      - oauth2_proxy_sha256 is match('^[0-9a-f]{64}$')
+      - oauth2_proxy_listen is match('^127\.0\.0\.1:[0-9]{1,5}$')
+      - oauth2_proxy_cookie_expire is match('^[1-9][0-9]{0,3}h$')
+      - secureedge_app.domain | default('') is match('^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
+      - secureedge_auth.github_users | default('') is not string
+      - secureedge_auth.github_users | default([]) | length > 0
+      - secureedge_auth.github_users | default([]) | reject('match', '^[A-Za-z0-9](-?[A-Za-z0-9]){0,38}$') | list | length == 0
+      - vault_oauth2_proxy_client_id is defined
+      - vault_oauth2_proxy_client_secret is defined
+      - vault_oauth2_proxy_cookie_secret is defined
+    fail_msg: >-
+      oauth2_proxy needs a pinned version and sha256, a 127.0.0.1 listen
+      address, secureedge_auth.github_users as a non-empty list of GitHub
+      usernames, and the three vault_oauth2_proxy_* values. See
+      docs/runbooks/setup.md, section "Login (GitHub)".
+    quiet: true
+
+- name: Check oauth2-proxy secrets
+  ansible.builtin.assert:
+    that:
+      - vault_oauth2_proxy_client_id is match('^[A-Za-z0-9._-]{8,64}$')
+      - vault_oauth2_proxy_client_secret is match('^[0-9a-f]{40}$')
+      - vault_oauth2_proxy_cookie_secret is match('^[A-Za-z0-9_-]{43}=?$')
+    quiet: true
+  no_log: true
+
+- name: Create the oauth2-proxy group
+  ansible.builtin.group:
+    name: oauth2-proxy
+    system: true
+
+- name: Create the oauth2-proxy user
+  ansible.builtin.user:
+    name: oauth2-proxy
+    group: oauth2-proxy
+    system: true
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    create_home: false
+
+- name: Read the installed oauth2-proxy version
+  ansible.builtin.command: /usr/local/bin/oauth2-proxy --version
+  register: oauth2_proxy_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install oauth2-proxy {{ oauth2_proxy_version }}
+  when: ('v' ~ oauth2_proxy_version ~ ' ') not in (oauth2_proxy_installed.stdout | default('') ~ ' ')
+  vars:
+    oauth2_proxy_archive: "oauth2-proxy-v{{ oauth2_proxy_version }}.linux-amd64"
+  block:
+    - name: Download the oauth2-proxy release
+      ansible.builtin.get_url:
+        url: "https://github.com/oauth2-proxy/oauth2-proxy/releases/download/v{{ oauth2_proxy_version }}/{{ oauth2_proxy_archive }}.tar.gz"
+        dest: "/var/cache/{{ oauth2_proxy_archive }}.tar.gz"
+        checksum: "sha256:{{ oauth2_proxy_sha256 }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Unpack the oauth2-proxy release
+      ansible.builtin.unarchive:
+        src: "/var/cache/{{ oauth2_proxy_archive }}.tar.gz"
+        dest: /var/cache
+        remote_src: true
+
+    - name: Install the oauth2-proxy binary
+      ansible.builtin.copy:
+        src: "/var/cache/{{ oauth2_proxy_archive }}/oauth2-proxy"
+        dest: /usr/local/bin/oauth2-proxy
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0755"
+      notify: Restart oauth2-proxy
+
+- name: Create the oauth2-proxy configuration directory
+  ansible.builtin.file:
+    path: /etc/oauth2-proxy
+    state: directory
+    owner: root
+    group: oauth2-proxy
+    mode: "0750"
+
+- name: Write the oauth2-proxy configuration
+  ansible.builtin.template:
+    src: oauth2-proxy.cfg.j2
+    dest: /etc/oauth2-proxy/oauth2-proxy.cfg
+    owner: root
+    group: oauth2-proxy
+    mode: "0640"
+  notify: Restart oauth2-proxy
+
+- name: Write the oauth2-proxy secrets
+  ansible.builtin.template:
+    src: oauth2-proxy.env.j2
+    dest: /etc/oauth2-proxy/oauth2-proxy.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Restart oauth2-proxy
+
+- name: Install the oauth2-proxy service
+  ansible.builtin.template:
+    src: oauth2-proxy.service.j2
+    dest: /etc/systemd/system/oauth2-proxy.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart oauth2-proxy
+
+- name: Run oauth2-proxy at boot
+  ansible.builtin.systemd_service:
+    name: oauth2-proxy
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Apply oauth2-proxy changes before NGINX is configured
+  ansible.builtin.meta: flush_handlers
