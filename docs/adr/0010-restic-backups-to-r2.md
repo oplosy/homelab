@@ -33,3 +33,9 @@ A restore moves the current data aside instead of deleting it.
 - Molecule backs up to a local repository and runs the restore drill;
   the R2 path is checked by hand after setup.
 - A restore needs a short downtime while the Compose project restarts.
+- The R2 token on app01 can delete objects (R2 has no write-only
+  permission), so root on app01 could delete the backups. Accepted for now;
+  an R2 bucket lock rule, or pruning from another machine with a separate
+  token, would remove that risk.
+- Retention also keeps every snapshot of the last 3 days, so a backup taken
+  before a risky change survives later runs the same day.

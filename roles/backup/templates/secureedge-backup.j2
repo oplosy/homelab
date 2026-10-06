@@ -24,10 +24,25 @@ snapshot=$(find "$meta/snapshots" -mindepth 1 -maxdepth 1 -type d | sort | tail 
 cp "$snapshot/db.sqlite" "$state/staging/garage-meta.sqlite"
 rm -rf "$meta/snapshots"
 
-"$restic" backup --tag atlasrisk \
-  --exclude "$meta/db.sqlite*" --exclude "$meta/snapshots" \
-  "$state/staging" {{ backup_data_root }}/garage
-"$restic" forget --tag atlasrisk --keep-daily {{ backup_keep_daily }} --keep-weekly {{ backup_keep_weekly }} --keep-monthly {{ backup_keep_monthly }} --prune
-"$restic" check
+# A run killed mid-way (reboot, network) leaves a lock that restic never
+# clears by itself; unlock removes only stale locks.
+"$restic" unlock
+
+# Exit 3: some files vanished or changed while being read (Garage's
+# temporary or just-deleted blocks). The snapshot is still written.
+status=0
+"$restic" backup --retry-lock 10m --tag atlasrisk \
+  --exclude "$meta/db.sqlite*" --exclude "$meta/snapshots" --exclude "*.tmp*" \
+  "$state/staging" {{ backup_data_root }}/garage || status=$?
+case $status in
+  0) ;;
+  3) echo "warning: some files changed during the backup; snapshot kept" >&2 ;;
+  *) exit "$status" ;;
+esac
+
+# --keep-within keeps every snapshot of the last days, so a manual backup
+# taken before a risky change survives later runs the same day.
+"$restic" forget --retry-lock 10m --tag atlasrisk --keep-within 3d --keep-daily {{ backup_keep_daily }} --keep-weekly {{ backup_keep_weekly }} --keep-monthly {{ backup_keep_monthly }} --prune
+"$restic" check --retry-lock 10m
 
 date -u +%Y-%m-%dT%H:%M:%SZ > "$state/last-success"

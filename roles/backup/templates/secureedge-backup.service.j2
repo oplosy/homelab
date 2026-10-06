@@ -7,5 +7,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/secureedge-backup
+# A hung dump or network call must not block every later run.
+TimeoutStartSec=3h
 Nice=10
 IOSchedulingClass=idle

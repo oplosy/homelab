@@ -48,8 +48,16 @@ sudo mv /srv/atlasrisk-before-restore-<time>/postgres /srv/atlasrisk-before-rest
 sudo docker compose --project-directory /etc/atlasrisk up -d --wait
 ```
 
-Create the `restored/` directory first with `sudo mkdir`. Once you are sure,
-delete the `/srv/atlasrisk-before-restore-*` directory you no longer need.
+If the restore stopped before "previous data moved to …", nothing was moved:
+just start the project again (`up -d --wait`). Otherwise create the
+`restored/` directory first with `sudo mkdir`. Once you are sure,
+delete the `/srv/atlasrisk-before-restore-*` directory you no longer need,
+and any `/var/lib/secureedge/backup/restore-*` left by a failed run (it holds
+unencrypted data).
+
+If backups fail with "repository is already locked", a run was killed
+mid-way; the next run clears stale locks by itself, or run
+`sudo secureedge-restic unlock` on app01.
 
 ## Restore drill
 

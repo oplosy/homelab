@@ -192,9 +192,11 @@ exec postgres psql -U atrisk atrisk` opens a database shell.
 ## 9. Backups
 
 app01 backs up PostgreSQL and Garage every night at 03:00 with restic to a
-Cloudflare R2 bucket, keeping 7 daily, 4 weekly and 6 monthly snapshots.
+Cloudflare R2 bucket, keeping every snapshot of the last 3 days and 7 daily, 4 weekly and 6
+monthly ones.
 
-1. In Cloudflare: R2 → create a bucket (for example `secureedge-backups`).
+1. In Cloudflare: R2 → create a bucket (for example `secureedge-backups`,
+   location Automatic, default jurisdiction).
    Then R2 → Manage API tokens → create a token with **Object Read & Write**
    on that bucket only. Note the access key id, the secret access key, and
    your account id (shown in the R2 overview).
@@ -224,7 +226,8 @@ vault_backup_r2_access_key_id: <access key id>
 vault_backup_r2_secret_access_key: <secret access key>
 ```
 
-5. Apply. The first run creates the repository. Take a backup and list it:
+5. Apply (`ansible-playbook playbooks/site.yml`); the first run creates the
+   repository. Then take a backup and list it:
 
 ```bash
 ansible-playbook playbooks/backup.yml
