@@ -12,3 +12,18 @@ ansible_become_password: "{{ vault_base_admin_password }}"
 # tests/unit/test_production_vars.py keeps them equal. wireguard_peers is
 # added by the owner (docs/runbooks/setup.md, section "WireGuard").
 wireguard_port: 51820
+
+# The application SecureEdge fronts. Set domain to your own name before the
+# first edge run: docs/runbooks/setup.md, section "Domain and certificates".
+secureedge_app:
+  name: atlasrisk
+  domain: atlasrisk.example.com
+  upstream:
+    address: 10.8.0.2
+    port: 8080
+  api_prefix: /api/
+  max_body: 12m
+  rate_limits:
+    api:
+      rate: 10r/s
+      burst: 20

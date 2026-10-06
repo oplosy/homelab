@@ -1,0 +1,69 @@
+---
+- name: Check TLS settings
+  ansible.builtin.assert:
+    that:
+      - secureedge_app is defined
+      - secureedge_app.name | default('') is match('^[a-z][a-z0-9-]{0,62}$')
+      - secureedge_app.domain | default('') is match('^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
+      - tls_acme_server is match('^https://\S+$')
+      - tls_acme_email == '' or tls_acme_email is match('^[^@\s]+@[^@\s]+\.[^@\s]+$')
+    fail_msg: >-
+      tls needs secureedge_app.name and a lower-case secureedge_app.domain,
+      and an https ACME server. See docs/runbooks/setup.md, section "Domain
+      and certificates".
+    quiet: true
+
+- name: Install certbot and openssl
+  ansible.builtin.apt:
+    name:
+      - certbot
+      - openssl
+    state: present
+
+- name: Create the TLS directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ tls_webroot }}"
+    - "{{ tls_dir }}"
+
+- name: Install the certificate deploy hook
+  ansible.builtin.template:
+    src: secureedge-tls-deploy.j2
+    dest: /usr/local/sbin/secureedge-tls-deploy
+    owner: root
+    group: root
+    mode: "0755"
+
+# NGINX needs a certificate to start; tasks/issue.yml replaces this one.
+- name: Write a placeholder certificate until the real one is issued
+  ansible.builtin.command:
+    argv:
+      - openssl
+      - req
+      - -x509
+      - -newkey
+      - ec
+      - -pkeyopt
+      - ec_paramgen_curve:prime256v1
+      - -nodes
+      - -days
+      - "30"
+      - -subj
+      - "/CN={{ secureedge_app.domain }}"
+      - -keyout
+      - "{{ tls_dir }}/privkey.pem"
+      - -out
+      - "{{ tls_dir }}/fullchain.pem"
+    creates: "{{ tls_dir }}/fullchain.pem"
+
+- name: Keep the private key root-only
+  ansible.builtin.file:
+    path: "{{ tls_dir }}/privkey.pem"
+    owner: root
+    group: root
+    mode: "0600"

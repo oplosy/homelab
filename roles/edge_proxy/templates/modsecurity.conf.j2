@@ -1,0 +1,22 @@
+# Managed by SecureEdge (role edge_proxy). The package's recommended base
+# configuration, then SecureEdge's overrides, then OWASP CRS.
+{% set size = secureedge_app.max_body[:-1] | int %}
+{% set bytes = size * (1024 if secureedge_app.max_body[-1] == 'k' else 1048576) %}
+Include /etc/nginx/modsecurity.conf
+
+SecRuleEngine On
+SecRequestBodyLimit {{ bytes }}
+SecRequestBodyNoFilesLimit {{ bytes }}
+SecAuditEngine RelevantOnly
+# Audit header and matched rules only: no request headers or bodies. A value
+# that triggers a rule is logged with that rule, so the directory is
+# root:adm 0750. Its own logrotate stanza uses copytruncate, because
+# libmodsecurity keeps the file open across NGINX's log reopen.
+SecAuditLogParts AHZ
+SecAuditLog /var/log/modsecurity/audit.log
+
+Include /etc/modsecurity/crs/crs-setup.conf
+SecAction "id:900000,phase:1,pass,t:none,nolog,setvar:tx.paranoia_level={{ edge_proxy_crs_paranoia }}"
+Include /etc/modsecurity/crs/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf
+Include /usr/share/modsecurity-crs/rules/*.conf
+Include /etc/modsecurity/crs/RESPONSE-999-EXCLUSION-RULES-AFTER-CRS.conf

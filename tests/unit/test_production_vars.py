@@ -25,9 +25,19 @@ def test_reboot_slots_differ_per_group() -> None:
     assert load_vars(HOSTS, "app")["base_reboot_time"] == "01:30"
 
 
-def test_only_wireguard_is_open_on_its_port() -> None:
+def test_open_ports_per_group() -> None:
     port = load_vars(HOSTS, "edge")["wireguard_port"]
-    for group in ("edge", "app"):
-        assert load_vars(HOSTS, group)["firewall_allowed"] == [
-            {"name": "wireguard", "proto": "udp", "port": port, "from": "any"}
-        ]
+    wireguard = {"name": "wireguard", "proto": "udp", "port": port, "from": "any"}
+    assert load_vars(HOSTS, "edge")["firewall_allowed"] == [
+        wireguard,
+        {"name": "http", "proto": "tcp", "port": 80, "from": "any"},
+        {"name": "https", "proto": "tcp", "port": 443, "from": "any"},
+    ]
+    assert load_vars(HOSTS, "app")["firewall_allowed"] == [wireguard]
+
+
+def test_application_upstream_is_app01_over_wireguard() -> None:
+    app = load_vars(HOSTS, "edge")["secureedge_app"]
+    assert app["upstream"] == {"address": "10.8.0.2", "port": 8080}
+    assert app["api_prefix"] == "/api/"
+    assert app["max_body"] == "12m"

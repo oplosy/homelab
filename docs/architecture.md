@@ -27,6 +27,8 @@ Databases, object storage, and management interfaces stay private.
    serves ACME challenges and redirects to HTTPS.
 2. ModSecurity with OWASP CRS inspects the request.
 3. NGINX asks oauth2-proxy (localhost only) whether the session is valid.
+   Until oauth2-proxy is deployed, nothing answers there and NGINX returns
+   500 for every application request.
    Without a valid session, browser routes redirect to login and API routes
    get 401.
 4. API routes have rate limits; excess requests get 429.
@@ -68,6 +70,22 @@ data under `/srv/atlasrisk`. No container publishes a port; services reach
 each other only on the Compose network. See
 [adr/0007-docker-for-app-services.md](adr/0007-docker-for-app-services.md).
 
+## Edge proxy
+
+On `edge01`, NGINX serves `secureedge_app.domain` with a Let's Encrypt
+certificate (certbot, HTTP-01 through `/.well-known/acme-challenge/` on
+port 80). Each application request passes, in order: ModSecurity with OWASP
+CRS 3.3 (blocking, paranoia level 1), the API rate limit (`429` beyond the
+burst), the `auth_request` check against `127.0.0.1:4180`, then either the
+static web root or the AtlasRisk upstream over WireGuard. Names other than
+the application's get no TLS handshake, and a request for another Host is
+closed without a response. Only the API accepts large bodies; other routes
+take at most 64 KiB. The WAF audit log (`/var/log/modsecurity/audit.log`,
+readable by root and `adm` only) keeps the matched rules, never request
+headers or bodies as such; a value that triggers a rule is logged with it.
+See
+[adr/0008-edge-stack-from-ubuntu-packages.md](adr/0008-edge-stack-from-ubuntu-packages.md).
+
 ## Firewall
 
 The `firewall` role owns one nftables table, `inet secureedge`, whose
@@ -99,5 +117,5 @@ device cannot use the app server as a router.
 ## Decisions
 
 See [adr/](adr/0001-ansible-for-configuration.md). Open choices (VPS provider,
-container runtime, identity provider, ACME client, backup and monitoring
+container runtime, identity provider, backup and monitoring
 tools) are listed in the layout spec and get an ADR when decided.

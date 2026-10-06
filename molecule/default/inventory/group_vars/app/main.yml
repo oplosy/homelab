@@ -9,6 +9,11 @@ firewall_allowed:
     proto: udp
     port: 51820
     from: any
+  # Test-only: the host checks' upstream stub on 10.8.0.2:8080.
+  - name: test-upstream
+    proto: tcp
+    port: 8080
+    from: wireguard
 
 # Throwaway data-service secrets for the Molecule containers only.
 vault_atlasrisk_postgres_password: qcgMvivvw63LCR2y+qxUcgemeTRVVPKkHQUEjz4GBH1AJ2Kd

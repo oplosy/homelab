@@ -1,0 +1,116 @@
+---
+# Test-only setup that real servers never get: Pebble (a local ACME server)
+# on edge01, the application name pointing at edge01, curl and openssl for
+# the host checks, and an HTTP stub the edge proxy checks start on demand.
+- name: Prepare the edge test container
+  hosts: edge
+  become: true
+  tasks:
+    - name: Install Pebble, curl and openssl
+      ansible.builtin.apt:
+        name:
+          - pebble
+          - curl
+          - openssl
+        state: present
+        update_cache: true
+
+    - name: Create the Pebble directory
+      ansible.builtin.file:
+        path: /etc/pebble
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    # Python's ssl verifies strictly (VERIFY_X509_STRICT): the CA needs key
+    # usage, and the server certificate needs key identifiers and key usage.
+    - name: Create Pebble's test CA and server certificate
+      ansible.builtin.shell: |
+        set -eu
+        cd /etc/pebble
+        openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
+          -days 30 -subj "/CN=SecureEdge Molecule test CA" -keyout ca.key -out ca.pem \
+          -addext "basicConstraints=critical,CA:TRUE" \
+          -addext "keyUsage=critical,keyCertSign,cRLSign"
+        openssl req -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
+          -subj "/CN=localhost" -keyout key.pem -out server.csr
+        printf '%s\n' \
+          'subjectAltName=DNS:localhost,IP:127.0.0.1' \
+          'basicConstraints=critical,CA:FALSE' \
+          'keyUsage=critical,digitalSignature' \
+          'extendedKeyUsage=serverAuth' \
+          'subjectKeyIdentifier=hash' \
+          'authorityKeyIdentifier=keyid' > server.ext
+        openssl x509 -req -in server.csr -CA ca.pem -CAkey ca.key -CAcreateserial \
+          -days 30 -extfile server.ext -out cert.pem
+      args:
+        executable: /bin/bash
+        creates: /etc/pebble/cert.pem
+
+    - name: Configure Pebble
+      ansible.builtin.copy:
+        dest: /etc/pebble/pebble-config.json
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          {"pebble": {"listenAddress": "127.0.0.1:14000",
+                      "managementListenAddress": "127.0.0.1:15000",
+                      "certificate": "/etc/pebble/cert.pem",
+                      "privateKey": "/etc/pebble/key.pem",
+                      "httpPort": 80,
+                      "tlsPort": 5001,
+                      "ocspResponderURL": "",
+                      "externalAccountBindingRequired": false}}
+
+    - name: Install the Pebble service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/pebble.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Pebble test ACME server (Molecule only)
+
+          [Service]
+          Environment=PEBBLE_VA_NOSLEEP=1 PEBBLE_WFE_NONCEREJECT=0
+          ExecStart=/usr/bin/pebble -config /etc/pebble/pebble-config.json
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Run Pebble
+      ansible.builtin.systemd_service:
+        name: pebble
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    # Pebble validates HTTP-01 by connecting to this name on port 80.
+    - name: Point the application name at edge01
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        line: "127.0.0.1 {{ secureedge_app.domain }}"
+        unsafe_writes: true  # Docker bind-mounts /etc/hosts; a rename fails
+
+- name: Install the HTTP stub on every test container
+  hosts: all
+  become: true
+  tasks:
+    - name: Create the test helper directory
+      ansible.builtin.file:
+        path: /usr/local/lib/secureedge-test
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install the HTTP stub
+      ansible.builtin.copy:
+        src: http_stub.py
+        dest: /usr/local/lib/secureedge-test/http_stub.py
+        owner: root
+        group: root
+        mode: "0644"

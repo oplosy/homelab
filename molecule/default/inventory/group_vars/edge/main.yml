@@ -9,3 +9,15 @@ firewall_allowed:
     proto: udp
     port: 51820
     from: any
+  - name: http
+    proto: tcp
+    port: 80
+    from: any
+  - name: https
+    proto: tcp
+    port: 443
+    from: any
+
+# Pebble (molecule/default/prepare.yml) plays Let's Encrypt.
+tls_acme_server: https://localhost:14000/dir
+tls_acme_ca_bundle: /etc/pebble/ca.pem

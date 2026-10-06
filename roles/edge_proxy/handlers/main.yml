@@ -1,0 +1,13 @@
+---
+# Both run, in this order, on "Reload NGINX": a failing check stops the play
+# before the reload, so NGINX keeps its running configuration.
+- name: Check the NGINX configuration
+  ansible.builtin.command: nginx -t
+  changed_when: false
+  listen: Reload NGINX
+
+- name: Reload the NGINX service
+  ansible.builtin.systemd_service:
+    name: nginx
+    state: reloaded
+  listen: Reload NGINX

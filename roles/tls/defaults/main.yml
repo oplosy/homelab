@@ -1,0 +1,13 @@
+---
+# ACME directory. Molecule points this at Pebble.
+tls_acme_server: https://acme-v02.api.letsencrypt.org/directory
+# Optional contact address; empty registers without one.
+tls_acme_email: ""
+# CA bundle certbot trusts for tls_acme_server; empty uses the system store.
+tls_acme_ca_bundle: ""
+# HTTP-01 challenge files; edge_proxy serves this directory on port 80.
+# edge_proxy_acme_webroot must be equal.
+tls_webroot: /var/lib/secureedge/acme
+# Where NGINX reads the certificate; edge_proxy_tls_dir must be equal.
+tls_dir: /etc/secureedge/tls
+tls_cert_name: "{{ secureedge_app.name }}"

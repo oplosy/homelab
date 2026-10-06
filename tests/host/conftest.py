@@ -47,3 +47,17 @@ def root(host) -> Callable[[str], str]:
 @pytest.fixture
 def in_container(host) -> bool:
     return host.run("systemd-detect-virt --container").rc == 0
+
+
+@pytest.fixture
+def app_host(host):
+    if group_for(host.check_output("hostname")) != "app":
+        pytest.skip("app servers only")
+    return host
+
+
+@pytest.fixture
+def edge_host(host):
+    if group_for(host.check_output("hostname")) != "edge":
+        pytest.skip("edge servers only")
+    return host

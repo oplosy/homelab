@@ -18,7 +18,29 @@ cp /mnt/c/Users/mesut/.ssh/server_ed25519 ~/.ssh/server_ed25519
 chmod 600 ~/.ssh/server_ed25519
 ```
 
-## 2. Create the vault
+## 2. Domain and certificates
+
+The edge server serves the application at `secureedge_app.domain` with a
+Let's Encrypt certificate. The certificate needs a domain that already
+points at edge01:
+
+1. Buy a domain from any registrar.
+2. In its DNS, create an `A` record for the application name (for example
+   `atlasrisk.<your domain>`) pointing at the edge server's public IPv4, and
+   an `AAAA` record if the VPS has IPv6.
+3. Set `domain` under `secureedge_app` in
+   `inventories/production/group_vars/all/main.yml` and commit it.
+4. Wait until `getent hosts <name>` returns the edge server's address, then
+   apply (§5).
+
+Applying the `tls` role accepts the Let's Encrypt subscriber agreement.
+Until a certificate is issued, NGINX serves a placeholder certificate and
+browsers show a certificate error. Until `oauth2_proxy` is deployed, every
+application request answers `500` by design: nothing is forwarded without
+a login. Changing the domain later issues a new certificate on the next
+run.
+
+## 3. Create the vault
 
 Create the vault password first (see the README), then generate the admin
 sudo password's hash. `openssl` prompts for the password twice:
@@ -40,7 +62,7 @@ vault_base_admin_password: <the sudo password you just chose>
 vault_base_admin_password_hash: <the line openssl printed>
 ```
 
-## 3. Bootstrap
+## 4. Bootstrap
 
 Use the provider's initial user (`root` or `ubuntu`). Compare the host key
 fingerprint with the one in the provider console when asked.
@@ -51,13 +73,13 @@ ansible-playbook playbooks/bootstrap.yml -e bootstrap_user=root
 
 From now on every run connects as `atlas`.
 
-## 4. Apply everything
+## 5. Apply everything
 
 ```bash
 ansible-playbook playbooks/site.yml
 ```
 
-## 5. Check the servers
+## 6. Check the servers
 
 ```bash
 pytest -m host --hosts=ansible://all --force-ansible --ansible-inventory=inventories/production/hosts.yml
@@ -66,9 +88,9 @@ pytest -m host --hosts=ansible://all --force-ansible --ansible-inventory=invento
 `--force-ansible` makes every check go through Ansible, so the vault-backed
 host addresses resolve and root-only checks can use the sudo password.
 
-## 6. WireGuard
+## 7. WireGuard
 
-Run this before the first `site.yml` (step 4): until it is done, the
+Run this before the first `site.yml` (step 5): until it is done, the
 `wireguard` role stops with a message pointing here.
 
 Create the key pairs:
@@ -136,7 +158,7 @@ Changing a server's own WireGuard address or the port needs
 `sudo systemctl restart wg-quick@wg0` on that server after `site.yml`;
 peer changes apply live.
 
-## 7. AtlasRisk data services
+## 8. AtlasRisk data services
 
 PostgreSQL and Garage run on the app server in the Compose project
 `/etc/atlasrisk`, with data in `/srv/atlasrisk` and no published ports.
@@ -162,12 +184,12 @@ vault_atlasrisk_garage_secret_key: <secret key>
 vault_atlasrisk_garage_rpc_secret: <RPC secret>
 ```
 
-Then run `ansible-playbook playbooks/site.yml` and the host checks (§5).
+Then run `ansible-playbook playbooks/site.yml` and the host checks (§6).
 On the server, `sudo docker compose --project-directory /etc/atlasrisk ps`
 shows both services; `sudo docker compose --project-directory /etc/atlasrisk
 exec postgres psql -U atrisk atrisk` opens a database shell.
 
-## 8. Lockout drill (once per server)
+## 9. Lockout drill (once per server)
 
 Prove the firewall rolls itself back. This makes SSH reachable only over a
 WireGuard interface that does not exist yet:

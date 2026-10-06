@@ -71,8 +71,10 @@ Needs Docker Desktop running with WSL integration enabled for Ubuntu:
 scripts/molecule-check
 ```
 
-It builds two Ubuntu 26.04 containers, applies `playbooks/site.yml`, checks
-idempotence, runs the host checks, and removes the containers.
+It builds two Ubuntu 26.04 containers, prepares them (Pebble as a local ACME
+server on `edge01`, and an HTTP stub for the edge checks), applies
+`playbooks/site.yml`, checks idempotence, runs the host checks, and removes
+the containers.
 The `app01` container runs privileged because it hosts Docker itself; its
 Docker state lives in two named volumes that the script removes afterwards.
 
@@ -88,6 +90,7 @@ To set up real servers, follow [docs/runbooks/setup.md](docs/runbooks/setup.md).
 | `docs/adr/` | Decision records |
 | `docs/evidence/` | Status of each "done" criterion |
 
-`roles/` holds `base` and `firewall`; `playbooks/` holds `site.yml`,
+`roles/` holds `base`, `firewall`, `wireguard`, `tls`, `edge_proxy`,
+`container_runtime` and `app_service`; `playbooks/` holds `site.yml`,
 `edge.yml`, `app.yml` and `bootstrap.yml`; `molecule/default/` is the test
 scenario.

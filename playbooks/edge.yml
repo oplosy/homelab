@@ -6,3 +6,12 @@
     - base
     - wireguard
     - firewall
+    - tls
+    - edge_proxy
+  tasks:
+    # edge_proxy ends by flushing its handlers, so NGINX already serves the
+    # challenge directory on port 80 here.
+    - name: Issue the TLS certificate
+      ansible.builtin.include_role:
+        name: tls
+        tasks_from: issue

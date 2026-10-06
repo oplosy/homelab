@@ -32,3 +32,17 @@ wireguard_peers:
 vault_wireguard_private_keys:
   edge01: yK/yJBCr9GFwm5ANQs43RkodcssVvJ4uwgKWrOHWenk=
   app01: mBI01bKLalFh4ZZ58P4uRZ0TJKN8OgitmZB96MaOO00=
+
+# The application, as in production but with a test-only name.
+secureedge_app:
+  name: atlasrisk
+  domain: atlasrisk.test
+  upstream:
+    address: 10.8.0.2
+    port: 8080
+  api_prefix: /api/
+  max_body: 12m
+  rate_limits:
+    api:
+      rate: 10r/s
+      burst: 20

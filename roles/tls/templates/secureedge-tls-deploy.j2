@@ -1,0 +1,16 @@
+#!/bin/sh
+# Managed by SecureEdge (role tls). certbot deploy hook: put the new
+# certificate where NGINX reads it, then reload NGINX if its configuration
+# still validates. A failing check exits non-zero and certbot logs it.
+set -eu
+dir={{ tls_dir | quote }}
+umask 077
+cp "$RENEWED_LINEAGE/privkey.pem" "$dir/privkey.pem.new"
+cp "$RENEWED_LINEAGE/fullchain.pem" "$dir/fullchain.pem.new"
+chmod 0644 "$dir/fullchain.pem.new"
+mv "$dir/privkey.pem.new" "$dir/privkey.pem"
+mv "$dir/fullchain.pem.new" "$dir/fullchain.pem"
+if systemctl is-active --quiet nginx; then
+  nginx -t -q
+  systemctl reload nginx
+fi
