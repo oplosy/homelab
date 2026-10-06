@@ -1,0 +1,15 @@
+---
+# Alerts go to this ntfy server; the topic is a secret in the vault
+# (docs/runbooks/setup.md, section "Alerts"). Molecule uses a local stub.
+monitoring_ntfy_server: https://ntfy.sh
+
+# A check fails when:
+monitoring_disk_max_percent: 85          # the root filesystem is fuller than this
+monitoring_memory_min_free_percent: 10   # less memory than this is available
+monitoring_load_per_cpu_max: 2           # the 15-minute load per CPU is higher
+monitoring_cert_min_days: 14             # the edge certificate expires sooner
+monitoring_backup_max_age_hours: 26      # app01's last good backup is older
+
+monitoring_tls_certificate: /etc/secureedge/tls/fullchain.pem
+monitoring_compose_dir: /etc/atlasrisk
+monitoring_backup_state_dir: /var/lib/secureedge/backup
