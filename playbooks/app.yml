@@ -9,3 +9,4 @@
     - container_runtime
     - app_service
     - backup
+    - monitoring

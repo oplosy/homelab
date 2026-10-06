@@ -50,3 +50,7 @@ secureedge_app:
 secureedge_auth:
   github_users:
     - secureedge-test
+
+# Alerts go to the host checks' HTTP stub, never to a real ntfy server.
+monitoring_ntfy_server: http://127.0.0.1:8099
+vault_monitoring_ntfy_topic: molecule-only-ntfy-topic-0123456789

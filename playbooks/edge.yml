@@ -9,6 +9,7 @@
     - tls
     - oauth2_proxy
     - edge_proxy
+    - monitoring
   tasks:
     # edge_proxy ends by flushing its handlers, so NGINX already serves the
     # challenge directory on port 80 here.
