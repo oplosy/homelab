@@ -7,6 +7,7 @@ upstream start test-only stubs, so they run only in Molecule.
 
 from __future__ import annotations
 
+import json
 import secrets
 import shlex
 import time
@@ -105,9 +106,24 @@ def auth_stub(stubs_allowed, root) -> Iterator[Callable[[], str]]:
 
 @pytest.fixture
 def upstream_stub(stubs_allowed, app_root, app) -> Iterator[Callable[[], str]]:
-    upstream = app["upstream"]
-    with stub(app_root, "se-upstream-stub", upstream["address"], upstream["port"], 200) as requests:
-        yield requests
+    # The release's API holds the upstream port: stop it for the stub.
+    compose = "docker compose --project-directory /etc/atlasrisk"
+    if app.get("release"):
+        app_root(f"{compose} stop api")
+    try:
+        upstream = app["upstream"]
+        with stub(app_root, "se-upstream-stub", upstream["address"], upstream["port"], 200) as requests:
+            yield requests
+    finally:
+        if app.get("release"):
+            app_root(f"{compose} start api")
+
+
+@pytest.fixture
+def release(app) -> dict:
+    if not app.get("release"):
+        pytest.skip("no AtlasRisk release is configured yet")
+    return app["release"]
 
 
 def test_nginx_runs_with_a_valid_config(edge_host, root) -> None:
@@ -352,7 +368,6 @@ def test_without_a_session_nothing_reaches_the_app(edge_host, app, upstream_stub
 def test_with_auth_requests_reach_the_app_over_wireguard(edge_host, app, auth_stub, upstream_stub) -> None:
     domain = app["domain"]
     prefix = app["api_prefix"]
-    assert f"{app['name']} is not deployed yet" in curl(edge_host, domain, f"https://{domain}/")
     assert curl(edge_host, domain, f"https://{domain}{prefix}v1/portfolios").strip() == "secureedge-stub"
     assert f"GET {prefix}v1/portfolios" in upstream_stub()
     assert "/oauth2/auth" in auth_stub()
@@ -392,3 +407,37 @@ def test_large_json_api_bodies_pass_the_waf(edge_host, root, app, auth_stub, ups
     finally:
         root("rm -f /tmp/se-json.json")
     assert code == 200
+
+
+def test_the_web_bundle_is_served_from_its_checksum_directory(edge_host, root, app, release) -> None:
+    target = root("readlink -f /var/www/" + app["name"])
+    assert target == f"/var/lib/secureedge/web/{release['web_bundle_sha256']}"
+    root(f"test -f {target}/index.html")
+    assert root(f"find {target} ! -user root | head -n 1") == ""
+
+
+def test_the_web_bundle_is_served_behind_the_login(edge_host, app, auth_stub, release) -> None:
+    domain = app["domain"]
+    page = curl(edge_host, domain, f"https://{domain}/")
+    assert "is not deployed yet" not in page
+    assert "<!doctype html>" in page.lower()
+    # Client-side routes fall back to the bundle's index.html.
+    assert curl(edge_host, domain, f"https://{domain}/portfolio/123") == page
+
+
+def test_the_api_answers_over_wireguard(edge_host, app, release) -> None:
+    upstream = app["upstream"]
+    url = f"http://{upstream['address']}:{upstream['port']}{app['api_prefix']}v1/instruments"
+    assert edge_host.check_output(f"curl -s -o /dev/null -w '%{{http_code}}' --max-time 10 {url}") == "200"
+
+
+def test_the_api_reaches_its_database_and_archive(edge_host, app, auth_stub, release, in_container) -> None:
+    if not in_container:
+        pytest.skip("reads the Molecule stand-in's self-report")
+    domain = app["domain"]
+    report = json.loads(curl(edge_host, domain, f"https://{domain}{app['api_prefix']}v1/instruments"))
+    assert report["stand_in"] == "atlasrisk-api"
+    assert report["path"] == f"{app['api_prefix']}v1/instruments"
+    assert report["database"] == "postgres:5432/atrisk"
+    assert report["database_reachable"] is True
+    assert report["s3_endpoint"] == "http://garage:3900"

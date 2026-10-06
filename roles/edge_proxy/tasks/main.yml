@@ -17,11 +17,17 @@
       - edge_proxy_auth_url is match('^http://127\.0\.0\.1:[0-9]{1,5}/[A-Za-z0-9/_-]*$')
       - edge_proxy_crs_paranoia | int in [1, 2, 3, 4]
       - edge_proxy_hsts_max_age | int >= 0
+      - >-
+        edge_proxy_release | length == 0 or
+        (edge_proxy_release.web_bundle_url | default('') is match('^(https|file)://[^\s]+$')
+         and edge_proxy_release.web_bundle_sha256 | default('') is match('^[0-9a-f]{64}$'))
     fail_msg: >-
       edge_proxy needs a complete secureedge_app (lower-case domain, IPv4
       upstream address and integer port, api_prefix like /api/, max_body like
-      12m, rate like 10r/s, integer burst) and an auth URL on 127.0.0.1. See
-      docs/runbooks/setup.md, section "Domain and certificates".
+      12m, rate like 10r/s, integer burst), an auth URL on 127.0.0.1, and for
+      a release an https web_bundle_url with its lower-case web_bundle_sha256.
+      See docs/runbooks/setup.md, sections "Domain and certificates" and
+      "AtlasRisk releases".
     quiet: true
   vars:
     edge_proxy_octet: '(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])'
@@ -50,7 +56,8 @@
     mode: "0755"
   loop:
     - /etc/nginx/secureedge
-    - "{{ edge_proxy_web_root }}"
+    - "{{ edge_proxy_web_releases }}"
+    - "{{ edge_proxy_web_releases }}/placeholder"
 
 # Matched values can land in the audit log: keep it from ordinary users.
 - name: Create the ModSecurity audit log directory
@@ -87,14 +94,53 @@
     mode: "0644"
   notify: Reload NGINX
 
-- name: Write a placeholder page until the web bundle is deployed
+- name: Write the placeholder page served until a release is deployed
   ansible.builtin.template:
     src: index.html.j2
-    dest: "{{ edge_proxy_web_root }}/index.html"
+    dest: "{{ edge_proxy_web_releases }}/placeholder/index.html"
     owner: root
     group: root
     mode: "0644"
-    force: false
+
+# get_url fails on a checksum mismatch and leaves nothing behind.
+- name: Download the web bundle
+  ansible.builtin.get_url:
+    url: "{{ edge_proxy_release.web_bundle_url }}"
+    dest: "{{ edge_proxy_web_releases }}/{{ edge_proxy_release.web_bundle_sha256 }}.tar.gz"
+    checksum: "sha256:{{ edge_proxy_release.web_bundle_sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: edge_proxy_release | length > 0
+
+- name: Create the web bundle directory
+  ansible.builtin.file:
+    path: "{{ edge_proxy_web_releases }}/{{ edge_proxy_release.web_bundle_sha256 }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: edge_proxy_release | length > 0
+
+- name: Unpack the web bundle
+  ansible.builtin.unarchive:
+    src: "{{ edge_proxy_web_releases }}/{{ edge_proxy_release.web_bundle_sha256 }}.tar.gz"
+    dest: "{{ edge_proxy_web_releases }}/{{ edge_proxy_release.web_bundle_sha256 }}"
+    remote_src: true
+    owner: root
+    group: root
+    creates: "{{ edge_proxy_web_releases }}/{{ edge_proxy_release.web_bundle_sha256 }}/index.html"
+  when: edge_proxy_release | length > 0
+
+# One atomic switch: NGINX serves either the old bundle or the new one.
+- name: Serve the current web bundle
+  ansible.builtin.file:
+    src: >-
+      {{ edge_proxy_web_releases }}/{{ edge_proxy_release.web_bundle_sha256
+      if edge_proxy_release | length > 0 else 'placeholder' }}
+    dest: "{{ edge_proxy_web_root }}"
+    state: link
+    force: true
 
 - name: Run NGINX at boot
   ansible.builtin.systemd_service:
