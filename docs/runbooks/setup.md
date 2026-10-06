@@ -36,7 +36,7 @@ points at edge01:
 Applying the `tls` role accepts the Let's Encrypt subscriber agreement.
 Until a certificate is issued, NGINX serves a placeholder certificate and
 browsers show a certificate error. The edge run also needs the login
-values from §9; until they are in the vault, the `oauth2_proxy` role stops
+values from §10; until they are in the vault, the `oauth2_proxy` role stops
 and points there. Changing the domain later issues a new certificate on the
 next run.
 
@@ -189,7 +189,51 @@ On the server, `sudo docker compose --project-directory /etc/atlasrisk ps`
 shows both services; `sudo docker compose --project-directory /etc/atlasrisk
 exec postgres psql -U atrisk atrisk` opens a database shell.
 
-## 9. Login (GitHub)
+## 9. Backups
+
+app01 backs up PostgreSQL and Garage every night at 03:00 with restic to a
+Cloudflare R2 bucket, keeping 7 daily, 4 weekly and 6 monthly snapshots.
+
+1. In Cloudflare: R2 → create a bucket (for example `secureedge-backups`).
+   Then R2 → Manage API tokens → create a token with **Object Read & Write**
+   on that bucket only. Note the access key id, the secret access key, and
+   your account id (shown in the R2 overview).
+2. Generate the restic password and **store it in your password manager as
+   well**: without it the backups cannot be decrypted.
+
+```bash
+openssl rand -base64 36
+```
+
+3. Set the non-secret values in `inventories/production/group_vars/app/main.yml`:
+
+```yaml
+backup_r2_account_id: <32-character account id>
+backup_r2_bucket: secureedge-backups
+```
+
+4. Add the secrets to the vault:
+
+```bash
+ansible-vault edit inventories/production/group_vars/all/vault.yml
+```
+
+```yaml
+vault_backup_restic_password: <restic password>
+vault_backup_r2_access_key_id: <access key id>
+vault_backup_r2_secret_access_key: <secret access key>
+```
+
+5. Apply. The first run creates the repository. Take a backup and list it:
+
+```bash
+ansible-playbook playbooks/backup.yml
+```
+
+Restoring is described in [restore.md](restore.md). Run the restore drill
+there once and record it in [evidence/README.md](../evidence/README.md).
+
+## 10. Login (GitHub)
 
 Only the GitHub accounts in `secureedge_auth.github_users` can sign in.
 Multi-factor authentication comes from GitHub, so turn on two-factor
@@ -225,7 +269,7 @@ Sessions last seven days. To run the authenticated external checks, copy
 the `__Host-secureedge` cookie's value from the browser into
 `SECUREEDGE_SESSION_COOKIE`.
 
-## 10. Lockout drill (once per server)
+## 11. Lockout drill (once per server)
 
 Prove the firewall rolls itself back. This makes SSH reachable only over a
 WireGuard interface that does not exist yet:
