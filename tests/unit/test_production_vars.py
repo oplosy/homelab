@@ -41,3 +41,7 @@ def test_application_upstream_is_app01_over_wireguard() -> None:
     assert app["upstream"] == {"address": "10.8.0.2", "port": 8080}
     assert app["api_prefix"] == "/api/"
     assert app["max_body"] == "12m"
+
+
+def test_only_the_owner_may_sign_in() -> None:
+    assert load_vars(HOSTS, "edge")["secureedge_auth"] == {"github_users": ["oplosy"]}

@@ -21,3 +21,9 @@ firewall_allowed:
 # Pebble (molecule/default/prepare.yml) plays Let's Encrypt.
 tls_acme_server: https://localhost:14000/dir
 tls_acme_ca_bundle: /etc/pebble/ca.pem
+
+# Throwaway oauth2-proxy values for the Molecule containers only. No GitHub
+# OAuth App exists for them; the checks stop at the redirect to GitHub.
+vault_oauth2_proxy_client_id: Ov23liMoleculeTestOnly
+vault_oauth2_proxy_client_secret: 894430f2e4b69fd7f10a9f386a34d26fae098b01
+vault_oauth2_proxy_cookie_secret: BXc15pnsmEuNf2xi1U5J-ugUAuQHUPlLL4UfBfnFU7Q=

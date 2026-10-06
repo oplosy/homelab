@@ -33,3 +33,22 @@ def test_sql_injection_probe_is_blocked(target) -> None:
     connection = http.client.HTTPSConnection(domain, 443, timeout=10, context=ssl.create_default_context())
     connection.request("GET", "/?id=1%27%20OR%20%271%27%3D%271")
     assert connection.getresponse().status == 403
+
+
+def get(domain: str, path: str, cookie: str | None = None) -> http.client.HTTPResponse:
+    connection = http.client.HTTPSConnection(domain, 443, timeout=10, context=ssl.create_default_context())
+    headers = {"Cookie": f"__Host-secureedge={cookie}"} if cookie else {}
+    connection.request("GET", path, headers=headers)
+    return connection.getresponse()
+
+
+def test_signed_in_browser_gets_the_app(target, session_cookie) -> None:
+    assert get(target("domain"), "/", session_cookie).status == 200
+
+
+def test_signed_in_api_call_works(target, session_cookie) -> None:
+    assert get(target("domain"), "/api/v1/portfolios", session_cookie).status == 200
+
+
+def test_api_without_a_session_is_refused(target, session_cookie) -> None:
+    assert get(target("domain"), "/api/v1/portfolios").status == 401

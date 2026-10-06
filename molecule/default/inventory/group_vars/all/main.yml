@@ -46,3 +46,7 @@ secureedge_app:
     api:
       rate: 10r/s
       burst: 20
+
+secureedge_auth:
+  github_users:
+    - secureedge-test

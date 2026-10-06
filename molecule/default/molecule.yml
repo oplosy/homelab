@@ -12,6 +12,8 @@ platforms:
     pre_build_image: false
     command: /sbin/init
     cgroupns_mode: host
+    # systemd sandboxing in oauth2-proxy.service needs mount namespaces
+    privileged: true
     capabilities:
       - NET_ADMIN
     volumes:
