@@ -310,3 +310,49 @@ def test_oauth2_proxy_accepts_good_input(tmp_path: Path) -> None:
     for key, value in GOOD_OAUTH2.items():
         if key.startswith("vault_"):
             assert value not in result.stdout + result.stderr
+
+
+GOOD_BACKUP = {
+    "backup_r2_account_id": "0123456789abcdef0123456789abcdef",
+    "backup_r2_bucket": "secureedge-backups",
+    "vault_backup_restic_password": "Vq3rJ8mZt1pXw6kLn0sYb4cHd7gEa2fU9oRiTeQy",
+    "vault_backup_r2_access_key_id": "0123456789abcdef0123456789abcdef",
+    "vault_backup_r2_secret_access_key": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+}
+
+
+def backup_with(**changes: object) -> dict:
+    return {**GOOD_BACKUP, **changes}
+
+
+@pytest.mark.parametrize(
+    "role_vars",
+    [
+        backup_with(backup_r2_account_id=""),
+        backup_with(backup_r2_bucket="Bad_Bucket"),
+        backup_with(backup_repository="relative/path"),
+        backup_with(backup_keep_daily=0),
+        {k: v for k, v in GOOD_BACKUP.items() if k != "vault_backup_restic_password"},
+        backup_with(vault_backup_restic_password="short"),
+        backup_with(vault_backup_restic_password="has a space and 'quotes' in it, long enough"),
+        backup_with(vault_backup_r2_secret_access_key="nothex"),
+    ],
+    ids=["no-account", "bad-bucket", "relative-repo", "keep-zero", "no-password", "short-password",
+         "quote-in-password", "bad-r2-secret"],
+)
+def test_backup_rejects_bad_input(tmp_path: Path, role_vars: dict) -> None:
+    result = run_role(tmp_path, "backup", role_vars)
+    assert result.returncode != 0
+    assert "Check backup settings" in result.stdout
+    assert "Install restic" not in result.stdout
+    for key, value in role_vars.items():
+        if key.startswith("vault_") and len(value) >= 8:
+            assert value not in result.stdout + result.stderr
+
+
+def test_backup_accepts_a_local_repository_without_r2(tmp_path: Path) -> None:
+    role_vars = {"backup_repository": "/var/backups/secureedge-restic",
+                 "vault_backup_restic_password": GOOD_BACKUP["vault_backup_restic_password"]}
+    result = run_role(tmp_path, "backup", role_vars)
+    assert "Check backup settings" in result.stdout
+    assert "backup needs" not in result.stdout

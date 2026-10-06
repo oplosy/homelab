@@ -1,0 +1,11 @@
+# Managed by SecureEdge (role backup).
+[Unit]
+Description=Nightly backup of AtlasRisk's data services (SecureEdge)
+
+[Timer]
+OnCalendar={{ backup_schedule }}
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

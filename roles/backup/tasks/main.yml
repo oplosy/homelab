@@ -1,0 +1,95 @@
+---
+- name: Check backup settings
+  ansible.builtin.assert:
+    that:
+      - backup_repository is match(backup_r2_pattern) or backup_repository is match('^/[A-Za-z0-9/_.-]+$')
+      - backup_schedule is match('^[0-9*:/ ,.-]+$')
+      - backup_keep_daily | int >= 1
+      - backup_keep_weekly | int >= 1
+      - backup_keep_monthly | int >= 1
+      - vault_backup_restic_password is defined
+      - backup_repository is not match('^s3:') or vault_backup_r2_access_key_id is defined
+      - backup_repository is not match('^s3:') or vault_backup_r2_secret_access_key is defined
+    fail_msg: >-
+      backup needs an R2 account id (32 hex) and bucket, or a local
+      backup_repository path; keep counts of at least 1; and the vault
+      values vault_backup_restic_password (plus vault_backup_r2_* for R2).
+      See docs/runbooks/setup.md, section "Backups".
+    quiet: true
+  vars:
+    backup_r2_pattern: '^s3:https://[0-9a-f]{32}\.r2\.cloudflarestorage\.com/[a-z0-9][a-z0-9-]{1,61}[a-z0-9]/[a-z0-9-]+$'
+
+# The values are written into a shell-sourced env file in single quotes.
+- name: Check backup secrets
+  ansible.builtin.assert:
+    that:
+      - vault_backup_restic_password is match('^[A-Za-z0-9+/=._-]{32,}$')
+      - backup_repository is not match('^s3:') or vault_backup_r2_access_key_id is match('^[0-9a-f]{32}$')
+      - backup_repository is not match('^s3:') or vault_backup_r2_secret_access_key is match('^[0-9a-f]{64}$')
+    quiet: true
+  no_log: true
+
+- name: Install restic
+  ansible.builtin.apt:
+    name: restic
+    state: present
+
+- name: Create the backup directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - /etc/secureedge/backup
+    - "{{ backup_state_dir }}"
+
+- name: Write the restic repository settings
+  ansible.builtin.template:
+    src: restic.env.j2
+    dest: /etc/secureedge/backup/restic.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Install the backup scripts
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/usr/local/sbin/{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - secureedge-restic
+    - secureedge-backup
+    - secureedge-restore
+
+- name: Install the backup service and timer
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - secureedge-backup.service
+    - secureedge-backup.timer
+
+# restic refuses to init over an existing repository, so a wrong password
+# fails here instead of creating a second repository.
+- name: Create the restic repository if it does not exist
+  ansible.builtin.shell: >-
+    /usr/local/sbin/secureedge-restic cat config >/dev/null 2>&1
+    || /usr/local/sbin/secureedge-restic init
+  register: backup_init
+  changed_when: "'created restic repository' in backup_init.stdout"
+  when: not ansible_check_mode
+
+- name: Run the backup every night
+  ansible.builtin.systemd_service:
+    name: secureedge-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true

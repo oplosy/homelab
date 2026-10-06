@@ -1,0 +1,11 @@
+# Managed by SecureEdge (role backup).
+[Unit]
+Description=Back up AtlasRisk's data services (SecureEdge)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/secureedge-backup
+Nice=10
+IOSchedulingClass=idle

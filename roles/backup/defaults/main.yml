@@ -1,0 +1,22 @@
+---
+# Off-server restic repository: Cloudflare R2. The owner sets the account id
+# and bucket (docs/runbooks/setup.md, section "Backups"). Molecule points
+# backup_repository at a local path instead.
+backup_r2_account_id: ""
+backup_r2_bucket: ""
+backup_repository: "s3:https://{{ backup_r2_account_id }}.r2.cloudflarestorage.com/{{ backup_r2_bucket }}/atlasrisk"
+
+backup_schedule: "*-*-* 03:00:00"
+backup_keep_daily: 7
+backup_keep_weekly: 4
+backup_keep_monthly: 6
+
+# What is backed up. Must match app_service (tests/unit/test_backup.py).
+backup_compose_dir: /etc/atlasrisk
+backup_data_root: /srv/atlasrisk
+backup_postgres_user: atrisk
+backup_postgres_db: atrisk
+
+# Staging for the database dump and Garage's metadata copy, and the
+# last-success marker.
+backup_state_dir: /var/lib/secureedge/backup

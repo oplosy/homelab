@@ -1,0 +1,52 @@
+#!/bin/bash
+# Managed by SecureEdge (role backup). Restore AtlasRisk's data services
+# from a restic snapshot:
+#   sudo secureedge-restore <snapshot-id|latest>
+# The current data is moved to {{ backup_data_root }}-before-restore-<time>,
+# never deleted. docs/runbooks/restore.md explains how to go back to it.
+set -euo pipefail
+umask 077
+
+snapshot=${1:?usage: secureedge-restore <snapshot-id|latest>}
+if [[ ! $snapshot =~ ^(latest|[0-9a-f]{8,64})$ ]]; then
+  echo "not a snapshot id: $snapshot" >&2
+  exit 2
+fi
+
+root={{ backup_data_root }}
+compose=(docker compose --project-directory {{ backup_compose_dir }})
+restic=/usr/local/sbin/secureedge-restic
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+aside=$root-before-restore-$stamp
+work={{ backup_state_dir }}/restore-$stamp
+staged=$work{{ backup_state_dir }}/staging
+
+# Fetch and check the snapshot before touching the running services.
+"$restic" snapshots "$snapshot" >/dev/null
+"$restic" restore "$snapshot" --target "$work"
+if [[ ! -s $staged/{{ backup_postgres_db }}.dump || ! -s $staged/garage-meta.sqlite || ! -d $work$root/garage/data ]]; then
+  echo "snapshot $snapshot is incomplete; nothing was changed" >&2
+  exit 1
+fi
+
+"${compose[@]}" down
+mkdir -p "$aside"
+mv "$root/postgres" "$root/garage" "$aside/"
+echo "previous data moved to $aside"
+
+# Garage: data blocks and metadata files, with the consistent metadata copy
+# as its database.
+mv "$work$root/garage" "$root/garage"
+cp "$staged/garage-meta.sqlite" "$root/garage/meta/db.sqlite"
+
+# PostgreSQL: a fresh cluster (created from the vault values on first
+# start), then the dump.
+mkdir -p "$root/postgres"
+chmod 0755 "$root/postgres"
+"${compose[@]}" up -d --wait postgres
+"${compose[@]}" exec -T postgres pg_restore -U {{ backup_postgres_user }} -d {{ backup_postgres_db }} --clean --if-exists --no-owner \
+  < "$staged/{{ backup_postgres_db }}.dump"
+
+"${compose[@]}" up -d --wait
+rm -rf "$work"
+echo "restored snapshot $snapshot"
