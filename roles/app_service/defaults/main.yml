@@ -7,3 +7,9 @@ app_service_garage_image: dxflrs/garage:v2.4.1@sha256:9c96caa2612d3411acc5b0e670
 app_service_postgres_db: atrisk
 app_service_postgres_user: atrisk
 app_service_garage_bucket: atlasrisk-raw
+# The AtlasRisk release from secureedge_app.release: API and worker images by
+# digest. Without one, only PostgreSQL and Garage run.
+app_service_release: "{{ (secureedge_app | default({})).release | default({}) }}"
+# Must equal wireguard_interface (tests/unit/test_app_service_templates.py):
+# the API publishes its port on this interface's address.
+app_service_wireguard_interface: wg0

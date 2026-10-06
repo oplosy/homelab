@@ -46,6 +46,14 @@ secureedge_app:
     api:
       rate: 10r/s
       burst: 20
+  # A test release. converge.yml replaces both images on app01 with the
+  # stand-in it publishes to a local registry (only the digest is dynamic);
+  # prepare.yml puts the test web bundle on edge01.
+  release:
+    api_image: 127.0.0.1:5000/atlasrisk-stand-in:molecule@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    worker_image: 127.0.0.1:5000/atlasrisk-stand-in:molecule@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    web_bundle_url: file:///usr/local/lib/secureedge-test/atlasrisk-web-molecule.tar.gz
+    web_bundle_sha256: 445057d01a8d492b45ea7f099ea101456885b87f5b19406c4497bb1003464c0b
 
 secureedge_auth:
   github_users:

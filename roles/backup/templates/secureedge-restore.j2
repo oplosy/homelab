@@ -57,6 +57,11 @@ done
 "${compose[@]}" exec -T postgres pg_restore -U {{ backup_postgres_user }} -d {{ backup_postgres_db }} --no-owner --exit-on-error --single-transaction \
   < "$staged/{{ backup_postgres_db }}.dump"
 
+# A backup from an older AtlasRisk release lacks the running API's schema:
+# migrate before the API and worker start.
+if "${compose[@]}" --profile migrate config --services | grep -qx migrate; then
+  "${compose[@]}" --profile migrate run --rm -T migrate
+fi
 "${compose[@]}" up -d --wait
 rm -rf "$work"
 echo "restored snapshot $snapshot"

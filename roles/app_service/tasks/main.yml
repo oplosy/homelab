@@ -27,6 +27,20 @@
     quiet: true
   no_log: true
 
+- name: Check the AtlasRisk release
+  ansible.builtin.assert:
+    that:
+      - app_service_release.api_image | default('') is match('^[^@\s]+@sha256:[0-9a-f]{64}$')
+      - app_service_release.worker_image | default('') is match('^[^@\s]+@sha256:[0-9a-f]{64}$')
+      - (secureedge_app.upstream | default({})).address | default('') is match('^[0-9]{1,3}(\.[0-9]{1,3}){3}$')
+      - (secureedge_app.upstream | default({})).port | default('') is integer
+    fail_msg: >-
+      The AtlasRisk release needs api_image and worker_image pinned by digest
+      and secureedge_app.upstream to publish the API on. See
+      docs/runbooks/setup.md, section "AtlasRisk releases".
+    quiet: true
+  when: app_service_release | length > 0
+
 # The postgres mount must be traversable by the container's postgres user
 # (uid 999); the data directory inside it is created 0700 by PostgreSQL.
 - name: Create the AtlasRisk directories
@@ -71,9 +85,44 @@
     mode: "0600"
   no_log: true
 
+# The API publishes its port on the WireGuard address, which must exist
+# before Docker restarts containers at boot.
+- name: Start Docker after WireGuard
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/docker.service.d/secureedge-wireguard.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by SecureEdge (role app_service).
+      [Unit]
+      Wants=wg-quick@{{ app_service_wireguard_interface }}.service
+      After=wg-quick@{{ app_service_wireguard_interface }}.service
+  notify: Reload systemd
+
 - name: Start the AtlasRisk data services
+  community.docker.docker_compose_v2:
+    project_src: "{{ app_service_config_dir }}"
+    services: [postgres, garage]
+    remove_orphans: true
+    state: present
+    wait: true
+    wait_timeout: 300
+
+# Forward-only and idempotent: an up-to-date database is left unchanged.
+- name: Apply the AtlasRisk database migrations
+  ansible.builtin.command:
+    cmd: >-
+      docker compose --project-directory {{ app_service_config_dir }}
+      --profile migrate run --rm -T migrate
+  register: app_service_migrate
+  changed_when: "'no migrations to run' not in (app_service_migrate.stdout + app_service_migrate.stderr)"
+  when: app_service_release | length > 0
+
+- name: Start the AtlasRisk API and risk worker
   community.docker.docker_compose_v2:
     project_src: "{{ app_service_config_dir }}"
     state: present
     wait: true
     wait_timeout: 300
+  when: app_service_release | length > 0

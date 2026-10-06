@@ -1,3 +1,65 @@
 ---
+# AtlasRisk publishes no release Molecule can pull, so app01 first builds a
+# stand-in with the same command line (files/atlasrisk-stand-in), pushes it
+# to a registry on its own loopback, and uses it by digest like a release.
+- name: Publish the AtlasRisk stand-in images
+  hosts: app
+  become: true
+  vars:
+    stand_in_dir: /usr/local/lib/secureedge-test/atlasrisk-stand-in
+    stand_in_tag: 127.0.0.1:5000/atlasrisk-stand-in:molecule
+  tasks:
+    - name: Install Docker
+      ansible.builtin.include_role:
+        name: container_runtime
+
+    - name: Check for the test registry
+      ansible.builtin.command: docker inspect --format '{{ "{{" }}.State.Running{{ "}}" }}' secureedge-test-registry
+      register: stand_in_registry
+      changed_when: false
+      failed_when: false
+
+    # Host networking: the registry publishes no port, so the host checks'
+    # "only the API publishes a port" holds for every container.
+    - name: Run the test registry on 127.0.0.1:5000
+      ansible.builtin.command: >-
+        docker run --detach --name secureedge-test-registry --restart always
+        --network host --env REGISTRY_HTTP_ADDR=127.0.0.1:5000
+        registry:3@sha256:ddf754342cfc8acc51a56d5d0ab6af06826461864460636d8bd5c546dab2a7b8
+      when: stand_in_registry.rc != 0 or stand_in_registry.stdout != 'true'
+      changed_when: true
+
+    - name: Copy the stand-in image sources
+      ansible.builtin.copy:
+        src: atlasrisk-stand-in/
+        dest: "{{ stand_in_dir }}/"
+        owner: root
+        group: root
+        mode: "0644"
+        directory_mode: "0755"
+
+    - name: Build and push the stand-in image
+      ansible.builtin.shell: |
+        set -eu
+        for _ in $(seq 30); do
+          python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/v2/')" 2>/dev/null && break
+          sleep 1
+        done
+        docker build --quiet --tag {{ stand_in_tag }} {{ stand_in_dir }} >/dev/null
+        docker push --quiet {{ stand_in_tag }} >/dev/null
+        docker image inspect --format '{{ "{{" }}index .RepoDigests 0{{ "}}" }}' {{ stand_in_tag }}
+      args:
+        executable: /bin/bash
+      register: stand_in_digest
+      changed_when: false
+
+    - name: Use the stand-in as the release images
+      ansible.builtin.set_fact:
+        secureedge_app: >-
+          {{ secureedge_app | combine({'release': {
+               'api_image': stand_in_tag ~ '@' ~ stand_in_digest.stdout.split('@')[1],
+               'worker_image': stand_in_tag ~ '@' ~ stand_in_digest.stdout.split('@')[1]}},
+             recursive=True) }}
+
 - name: Converge
   ansible.builtin.import_playbook: ../../playbooks/site.yml

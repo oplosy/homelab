@@ -191,6 +191,47 @@ def test_app_service_accepts_good_input(tmp_path: Path) -> None:
         assert value not in result.stdout + result.stderr
 
 
+GOOD_RELEASE = {
+    "api_image": "ghcr.io/oplosy/atrisk-api:v1.0.0@sha256:" + "a" * 64,
+    "worker_image": "ghcr.io/oplosy/atrisk-risk-worker:v1.0.0@sha256:" + "b" * 64,
+    "web_bundle_url": "https://github.com/oplosy/atrisk/releases/download/v1.0.0/atlasrisk-web-v1.0.0.tar.gz",
+    "web_bundle_sha256": "c" * 64,
+}
+
+
+def release_with(**changes: object) -> dict:
+    return {
+        "secureedge_app": {
+            "name": "atlasrisk",
+            "upstream": {"address": "10.8.0.2", "port": 8080},
+            "release": {**GOOD_RELEASE, **changes},
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    "role_vars",
+    [
+        release_with(api_image="ghcr.io/oplosy/atrisk-api:v1.0.0"),
+        release_with(worker_image="ghcr.io/oplosy/atrisk-risk-worker:latest"),
+        release_with(worker_image=""),
+        {"secureedge_app": {"name": "atlasrisk", "release": GOOD_RELEASE}},
+    ],
+    ids=["unpinned-api", "unpinned-worker", "no-worker", "no-upstream"],
+)
+def test_app_service_rejects_a_bad_release(tmp_path: Path, role_vars: dict) -> None:
+    result = run_role(tmp_path, "app_service", {**GOOD_APP, **role_vars})
+    assert result.returncode != 0
+    assert "Check the AtlasRisk release" in result.stdout
+    assert "Create the AtlasRisk directories" not in result.stdout
+
+
+def test_app_service_accepts_a_release(tmp_path: Path) -> None:
+    result = run_role(tmp_path, "app_service", {**GOOD_APP, **release_with()})
+    assert "Check the AtlasRisk release" in result.stdout
+    assert "The AtlasRisk release needs" not in result.stdout
+
+
 GOOD_SECUREEDGE_APP = {
     "name": "atlasrisk",
     "domain": "atlasrisk.example.com",
@@ -254,6 +295,29 @@ def test_edge_proxy_rejects_bad_input(tmp_path: Path, role_vars: dict) -> None:
     assert result.returncode != 0
     assert "Check edge proxy settings" in result.stdout
     assert "Install NGINX, ModSecurity and OWASP CRS" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "release",
+    [
+        {**GOOD_RELEASE, "web_bundle_url": "http://github.com/atlasrisk-web.tar.gz"},
+        {**GOOD_RELEASE, "web_bundle_url": "https://github.com/atlasrisk web.tar.gz"},
+        {**GOOD_RELEASE, "web_bundle_sha256": "C" * 64},
+        {**GOOD_RELEASE, "web_bundle_sha256": ""},
+        {key: value for key, value in GOOD_RELEASE.items() if key != "web_bundle_url"},
+    ],
+    ids=["plain-http", "space-in-url", "uppercase-checksum", "no-checksum", "no-url"],
+)
+def test_edge_proxy_rejects_a_bad_web_bundle(tmp_path: Path, release: dict) -> None:
+    result = run_role(tmp_path, "edge_proxy", app_with(release=release))
+    assert result.returncode != 0
+    assert "Check edge proxy settings" in result.stdout
+    assert "Install NGINX, ModSecurity and OWASP CRS" not in result.stdout
+
+
+def test_edge_proxy_accepts_a_release(tmp_path: Path) -> None:
+    result = run_role(tmp_path, "edge_proxy", app_with(release=GOOD_RELEASE))
+    assert "edge_proxy needs" not in result.stdout
 
 
 def test_edge_proxy_accepts_good_input(tmp_path: Path) -> None:
