@@ -161,7 +161,8 @@ peer changes apply live.
 ## 8. AtlasRisk data services
 
 PostgreSQL and Garage run on the app server in the Compose project
-`/etc/atlasrisk`, with data in `/srv/atlasrisk` and no published ports.
+`/etc/atlasrisk`, with data in `/srv/atlasrisk` and no published ports (the
+API, once a release is set, publishes only on the WireGuard address).
 Generate their secrets once:
 
 ```bash
@@ -188,6 +189,42 @@ Then run `ansible-playbook playbooks/site.yml` and the host checks (§6).
 On the server, `sudo docker compose --project-directory /etc/atlasrisk ps`
 shows both services; `sudo docker compose --project-directory /etc/atlasrisk
 exec postgres psql -U atrisk atrisk` opens a database shell.
+
+### AtlasRisk releases
+
+AtlasRisk's `Release` workflow publishes each version (see its
+`docs/releases/PUBLISHING.md`). On the release page, `images.txt` lists both
+images by digest and the notes give the web bundle's SHA-256. Copy them into
+`inventories/production/group_vars/all/main.yml`:
+
+```yaml
+secureedge_app:
+  # ...the existing keys...
+  release:
+    api_image: ghcr.io/oplosy/atrisk-api:v1.0.0@sha256:<digest>
+    worker_image: ghcr.io/oplosy/atrisk-risk-worker:v1.0.0@sha256:<digest>
+    web_bundle_url: https://github.com/oplosy/atrisk/releases/download/v1.0.0/atlasrisk-web-v1.0.0.tar.gz
+    web_bundle_sha256: <SHA-256 from the release notes>
+```
+
+GHCR creates the image packages as private. Either make them public in the
+package settings, or log `app01` in once with a token that has only
+`read:packages`:
+
+```bash
+sudo docker login ghcr.io -u <GitHub user>
+```
+
+Then, for the first release and every upgrade:
+
+1. Back up: `ansible-playbook playbooks/backup.yml` (§9).
+2. Run `ansible-playbook playbooks/site.yml`. On `app01` it applies the
+   migrations, then starts the new API and worker; on `edge01` it downloads
+   the web bundle, refuses it if the checksum differs, and switches to it.
+3. Run the host checks (§6).
+
+Migrations are forward-only: to go back to an older release, restore the
+backup from step 1 (`docs/runbooks/restore.md`) and set the older `release`.
 
 ## 9. Backups
 

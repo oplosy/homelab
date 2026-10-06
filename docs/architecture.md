@@ -69,9 +69,17 @@ forward nothing. See [adr/0006-wireguard-mesh.md](adr/0006-wireguard-mesh.md).
 
 On `app01`, Docker runs the Compose project `atlasrisk` from
 `/etc/atlasrisk`: PostgreSQL 18.6 and Garage 2.4.1, pinned by digest, with
-data under `/srv/atlasrisk`. No container publishes a port; services reach
-each other only on the Compose network. See
+data under `/srv/atlasrisk`. Services reach each other only on the Compose
+network. See
 [adr/0007-docker-for-app-services.md](adr/0007-docker-for-app-services.md).
+
+With `secureedge_app.release` set, the AtlasRisk API and risk worker join
+the project, pinned by digest, with read-only root filesystems and no
+capabilities. Ansible applies the database migrations before (re)starting
+them. The API is the only published port, on the WireGuard address, and the
+firewall forwards it only from `edge01`. `edge01` serves the release's web
+bundle after checking its SHA-256. See
+[adr/0012-atlasrisk-releases.md](adr/0012-atlasrisk-releases.md).
 
 ## Backups
 
@@ -128,8 +136,10 @@ Ports published by Docker bypass the `input` chain. Containers must
 therefore publish only on the WireGuard address or `127.0.0.1`.
 
 A `forward` chain drops anything arriving from WireGuard that would be
-routed onward, except DNAT'd traffic to a published container port, so a VPN
-device cannot use the app server as a router.
+routed onward, so a VPN device cannot use the app server as a router. The
+only exception is DNAT'd traffic to a published container port from the
+addresses in `firewall_published_from` (on `app01`: `edge01`), so even owner
+devices reach the API only through the edge.
 
 ## Failure behaviour
 

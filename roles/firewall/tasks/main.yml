@@ -5,7 +5,12 @@
       - firewall_ssh_from in ['any', 'wireguard']
       - firewall_revert_seconds | int >= 30
       - firewall_wireguard_interface | length > 0
-    fail_msg: "firewall_ssh_from must be any or wireguard; firewall_revert_seconds at least 30"
+      - firewall_published_from is sequence and firewall_published_from is not string
+      - >-
+        firewall_published_from | reject('match', '^[0-9]{1,3}(\.[0-9]{1,3}){3}$') | list | length == 0
+    fail_msg: >-
+      firewall_ssh_from must be any or wireguard; firewall_revert_seconds at
+      least 30; firewall_published_from a list of IPv4 addresses
     quiet: true
 
 - name: Check each allowed port

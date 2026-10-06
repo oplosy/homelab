@@ -1,7 +1,8 @@
 ---
 # Test-only setup that real servers never get: Pebble (a local ACME server)
 # on edge01, the application name pointing at edge01, curl and openssl for
-# the host checks, and an HTTP stub the edge proxy checks start on demand.
+# the host checks, an HTTP stub the edge proxy checks start on demand, and
+# the test web bundle.
 - name: Prepare the edge test container
   hosts: edge
   become: true
@@ -114,3 +115,12 @@
         owner: root
         group: root
         mode: "0644"
+
+    - name: Install the test web bundle
+      ansible.builtin.copy:
+        src: atlasrisk-web-molecule.tar.gz
+        dest: /usr/local/lib/secureedge-test/atlasrisk-web-molecule.tar.gz
+        owner: root
+        group: root
+        mode: "0644"
+      when: "'edge' in group_names"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -9,7 +10,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 
 
-def render(tmp_path: Path, **extra: str) -> str:
+def render(tmp_path: Path, **extra: object) -> str:
     out = tmp_path / "secureedge.nft"
     playbook = tmp_path / "render.yml"
     playbook.write_text(
@@ -28,19 +29,29 @@ def render(tmp_path: Path, **extra: str) -> str:
     args = ["ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook),
             "-e", f"@{REPO}/roles/firewall/defaults/main.yml"]
     for key, value in extra.items():
-        args += ["-e", f"{key}={value}"]
+        args += ["-e", json.dumps({key: value})]
     result = subprocess.run(args, cwd=tmp_path, env=env, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
     return out.read_text(encoding="utf-8")
 
 
+def forward_chain(text: str) -> str:
+    return text.split("chain forward {", 1)[1].split("\n\t}", 1)[0]
+
+
 def test_forward_chain_drops_routing_from_wireguard(tmp_path: Path) -> None:
-    text = render(tmp_path)
-    forward = text.split("chain forward {", 1)[1].split("}", 1)[0]
+    forward = forward_chain(render(tmp_path))
     assert "type filter hook forward priority filter; policy accept;" in forward
-    assert 'iifname "wg0" ct status dnat accept' in forward
     assert 'iifname "wg0" drop' in forward
-    assert forward.index("ct status dnat accept") < forward.index('iifname "wg0" drop')
+    # By default no WireGuard peer reaches a published container port.
+    assert "ct status dnat" not in forward
+
+
+def test_only_listed_peers_reach_published_container_ports(tmp_path: Path) -> None:
+    forward = forward_chain(render(tmp_path, firewall_published_from=["10.8.0.1"]))
+    rule = 'iifname "wg0" ct status dnat ip saddr { 10.8.0.1 } accept'
+    assert rule in forward
+    assert forward.index(rule) < forward.index('iifname "wg0" drop')
 
 
 def test_forward_chain_follows_the_interface_name(tmp_path: Path) -> None:

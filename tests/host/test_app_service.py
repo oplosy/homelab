@@ -33,12 +33,52 @@ def test_data_services_are_healthy(app_host, root) -> None:
         assert state["Health"]["Status"] == "healthy", service
 
 
-def test_no_container_publishes_a_port(app_host, root) -> None:
-    for container_id in root("docker ps -q").split():
+@pytest.fixture
+def release(expected) -> dict:
+    release = expected.get("secureedge_app", {}).get("release")
+    if not release:
+        pytest.skip("no AtlasRisk release is configured yet")
+    return release
+
+
+def published_ports(details: dict) -> dict:
+    published = details["NetworkSettings"]["Ports"] or {}
+    return {port: bindings for port, bindings in published.items() if bindings}
+
+
+def test_only_the_api_publishes_a_port_and_only_on_wireguard(app_host, root, expected) -> None:
+    app = expected.get("secureedge_app", {})
+    api = root(f"{COMPOSE} ps -q api 2>/dev/null || true").strip() if app.get("release") else ""
+    for container_id in root("docker ps -q --no-trunc").split():
         details = json.loads(root(f"docker inspect {container_id}"))[0]
-        assert not details["HostConfig"]["PortBindings"], details["Name"]
-        published = details["NetworkSettings"]["Ports"] or {}
-        assert all(not bindings for bindings in published.values()), details["Name"]
+        if container_id == api:
+            upstream = app["upstream"]
+            port = str(upstream["port"])
+            assert published_ports(details) == {
+                f"{port}/tcp": [{"HostIp": upstream["address"], "HostPort": port}]
+            }
+        else:
+            assert not details["HostConfig"]["PortBindings"], details["Name"]
+            assert not published_ports(details), details["Name"]
+
+
+def test_the_release_runs_locked_down(app_host, root, release) -> None:
+    for service in ("api", "worker"):
+        details = container(root, service)
+        assert details["State"]["Running"], service
+        assert details["HostConfig"]["ReadonlyRootfs"] is True, service
+        assert details["HostConfig"]["CapDrop"] == ["ALL"], service
+        assert details["Config"]["User"] not in ("", "0", "root"), service
+        assert details["HostConfig"]["LogConfig"]["Type"] == "local", service
+
+
+def test_migrations_leave_no_container_behind(app_host, root, release) -> None:
+    assert root("docker ps -a -q --filter label=com.docker.compose.service=migrate") == ""
+
+
+def test_docker_starts_after_wireguard(app_host) -> None:
+    after = app_host.check_output("systemctl show docker --property After --value")
+    assert "wg-quick@wg0.service" in after.split()
 
 
 def test_postgres_accepts_connections(app_host, root, expected) -> None:

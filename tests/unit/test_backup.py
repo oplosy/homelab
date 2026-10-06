@@ -126,3 +126,11 @@ def test_restore_waits_for_the_real_server_and_loads_all_or_nothing(tmp_path: Pa
     assert "pg_isready -h 127.0.0.1" in script
     assert script.index("pg_isready -h 127.0.0.1") < script.index("pg_restore")
     assert "pg_restore -U atrisk -d atrisk --no-owner --exit-on-error --single-transaction" in script
+
+
+def test_restore_migrates_an_older_backup_before_the_app_starts(tmp_path: Path) -> None:
+    # A backup taken under an older release lacks the running API's schema.
+    script = render(tmp_path, "secureedge-restore.j2")
+    migrate = "--profile migrate run --rm -T migrate"
+    assert migrate in script
+    assert script.index("pg_restore") < script.index(migrate) < script.rindex("up -d --wait")

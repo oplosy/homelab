@@ -43,3 +43,62 @@ services:
       timeout: 10s
       retries: 12
       start_period: 15s
+{% if app_service_release | length > 0 %}
+{%   set upstream = secureedge_app.upstream %}
+
+  # The AtlasRisk release. Ansible runs `migrate` before (re)starting the
+  # API and worker; `up` never starts it.
+  migrate:
+    image: {{ app_service_release.api_image }}
+    profiles: [migrate]
+    command: [migrate]
+    environment:
+      ATLASRISK_DATABASE_URL: ${ATLASRISK_DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
+  # The only published port, and only on the WireGuard address: the edge
+  # proxy is its sole client.
+  api:
+    image: {{ app_service_release.api_image }}
+    restart: unless-stopped
+    command: [-listen, "0.0.0.0:{{ upstream.port }}"]
+    environment:
+      ATLASRISK_DATABASE_URL: ${ATLASRISK_DATABASE_URL}
+      ATLASRISK_S3_ENDPOINT: http://garage:3900
+      ATLASRISK_S3_REGION: garage
+      ATLASRISK_S3_BUCKET: ${GARAGE_BUCKET}
+      AWS_ACCESS_KEY_ID: ${GARAGE_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${GARAGE_SECRET_KEY}
+    ports:
+      - "{{ upstream.address }}:{{ upstream.port }}:{{ upstream.port }}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
+  worker:
+    image: {{ app_service_release.worker_image }}
+    restart: unless-stopped
+    environment:
+      ATLASRISK_DATABASE_URL: ${ATLASRISK_DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    # The worker finishes its current job on SIGTERM.
+    stop_grace_period: 2m
+{% endif %}
