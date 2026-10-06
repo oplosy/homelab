@@ -97,7 +97,7 @@ secureedge_auth:
 - **Provider:**
   - `provider = "github"`;
   - `github_users` from `secureedge_auth.github_users`;
-  - `scope = "read:user"`;
+  - `scope = "user:email read:org"` (the provider reads `/user/orgs`, `/user/teams` and `/user/emails` at every login; `read:user` alone fails — corrected after the final review);
   - `email_domains = ["*"]`, because the user list is the restriction.
 - **Network:**
   - `http_address = oauth2_proxy_listen`;
@@ -202,7 +202,7 @@ Molecule uses throwaway client id/secret and cookie secret values.
   `127.0.0.1:4180`. The config is `root:oauth2-proxy 640`; the env file is `root 600`.
 - **Login flow without a session:**
   - `/` redirects to `/oauth2/start`;
-  - `/oauth2/start` redirects to `https://github.com/login/oauth/authorize` with the client id, `redirect_uri=https://atlasrisk.test/oauth2/callback`, and `scope=read:user`.
+  - `/oauth2/start` redirects to `https://github.com/login/oauth/authorize` with the client id, `redirect_uri=https://atlasrisk.test/oauth2/callback`, and `scope=user:email read:org`.
 - **API without a session:** returns `401`, and the upstream stub receives nothing.
 - **Origin check:** a `POST` to the API without `Origin`, or with `Origin: https://evil.example`, gets `403`.
 - **Header stripping:** with the auth stub, a request carrying `X-Forwarded-User: mallory`

@@ -49,7 +49,9 @@ def test_only_the_listed_github_users_may_sign_in(tmp_path: Path) -> None:
     text = render(tmp_path, "oauth2-proxy.cfg.j2")
     assert 'provider = "github"' in text
     assert 'github_users = ["oplosy"]' in text
-    assert 'scope = "read:user"' in text
+    # read:user alone fails the login: oauth2-proxy's GitHub provider always
+    # reads /user/orgs, /user/teams and /user/emails.
+    assert 'scope = "user:email read:org"' in text
 
 
 def test_listens_on_localhost_and_calls_back_to_the_domain(tmp_path: Path) -> None:
@@ -95,3 +97,13 @@ def test_listen_address_matches_the_edge_auth_url() -> None:
     oauth2 = yaml.safe_load((ROLE / "defaults" / "main.yml").read_text(encoding="utf-8"))
     edge = yaml.safe_load((REPO / "roles" / "edge_proxy" / "defaults" / "main.yml").read_text(encoding="utf-8"))
     assert edge["edge_proxy_auth_url"].startswith(f"http://{oauth2['oauth2_proxy_listen']}/")
+
+
+def test_the_role_waits_until_oauth2_proxy_answers() -> None:
+    # systemd reports a Type=simple service as started even if the binary
+    # exits at once (e.g. a config key a new version rejects).
+    tasks = yaml.safe_load((ROLE / "tasks" / "main.yml").read_text(encoding="utf-8"))
+    names = [task["name"] for task in tasks]
+    wait = next(task for task in tasks if "ansible.builtin.wait_for" in task)
+    assert names.index(wait["name"]) > names.index("Apply oauth2-proxy changes before NGINX is configured")
+    assert wait["ansible.builtin.wait_for"]["port"] == "{{ oauth2_proxy_listen.split(':')[1] | int }}"

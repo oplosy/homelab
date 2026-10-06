@@ -2,7 +2,9 @@
 # client secret and cookie secret come from oauth2-proxy.env.
 provider = "github"
 github_users = {{ secureedge_auth.github_users | to_json }}
-scope = "read:user"
+# GitHub provider: every login reads /user/orgs, /user/teams and /user/emails,
+# so read:user alone fails at the callback. No repository access.
+scope = "user:email read:org"
 email_domains = ["*"]
 
 http_address = "{{ oauth2_proxy_listen }}"

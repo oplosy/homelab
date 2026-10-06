@@ -237,7 +237,7 @@ def test_login_starts_at_github(edge_host, app, expected) -> None:
     client_id = expected.get("vault_oauth2_proxy_client_id")
     assert query["client_id"] == [client_id] if client_id else query["client_id"]
     assert query["redirect_uri"] == [f"https://{domain}/oauth2/callback"]
-    assert query["scope"] == ["read:user"]
+    assert set(query["scope"][0].split()) == {"user:email", "read:org"}
 
 
 @pytest.mark.parametrize(
@@ -282,6 +282,9 @@ def test_stopped_oauth2_proxy_fails_closed(edge_host, root, app) -> None:
     finally:
         root("systemctl start oauth2-proxy")
         wait_for_port(root, "127.0.0.1", 4180)
+    # Back in service: the login redirect and the API's 401 return.
+    assert status(edge_host, domain, f"https://{domain}/") == 302
+    assert status(edge_host, domain, f"https://{domain}{app['api_prefix']}v1/portfolios") == 401
 
 
 @pytest.mark.parametrize("probe", [SQL_INJECTION.format(marker="se"), XSS], ids=["sql-injection", "xss"])

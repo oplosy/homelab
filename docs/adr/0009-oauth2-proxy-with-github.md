@@ -15,7 +15,9 @@ no Docker.
 
 Run oauth2-proxy 7.15.5 from its GitHub release archive, verified against a
 pinned sha256, as a sandboxed systemd service on 127.0.0.1:4180. Use the
-GitHub provider limited to the owner's account (`read:user` only); MFA is
+GitHub provider limited to the owner's account, with scope `user:email read:org`
+(no repository access; the provider reads the account's organizations, teams
+and e-mail addresses at every login, so `read:user` alone fails); MFA is
 the account's GitHub two-factor authentication. Sessions last seven days in
 a `__Host-` cookie (`Secure`, `HttpOnly`, `SameSite=Lax`). NGINX refuses
 state-changing API requests whose `Origin` is not the site or whose

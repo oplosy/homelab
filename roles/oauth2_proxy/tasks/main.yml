@@ -125,3 +125,10 @@
 
 - name: Apply oauth2-proxy changes before NGINX is configured
   ansible.builtin.meta: flush_handlers
+
+# systemd reports the service as started even if the binary exits at once.
+- name: Wait until oauth2-proxy answers
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ oauth2_proxy_listen.split(':')[1] | int }}"
+    timeout: 30
