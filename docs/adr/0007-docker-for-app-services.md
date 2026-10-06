@@ -1,6 +1,7 @@
 # 0007: Docker Compose for AtlasRisk's services
 
-- **Status:** Accepted
+- **Status:** Accepted; published ports and forwarding amended by
+  [0012](0012-atlasrisk-releases.md)
 - **Date:** 2026-10-04
 
 ## Context
