@@ -4,5 +4,8 @@ firewall_ssh_rate: 10/minute
 firewall_ssh_burst: 5
 firewall_allowed: []
 firewall_wireguard_interface: wg0
+# WireGuard addresses that may reach ports containers publish on this host's
+# WireGuard address. Empty: none may.
+firewall_published_from: []
 firewall_revert_seconds: 120
 firewall_log_drops: true

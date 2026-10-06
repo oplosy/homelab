@@ -1,5 +1,8 @@
 ---
 base_reboot_time: "01:30"
+# Only the edge server reaches the AtlasRisk API that Docker publishes on the
+# WireGuard address; owner devices go through the edge like everyone else.
+firewall_published_from: "{{ wireguard_peers | selectattr('name', 'in', groups['edge']) | map(attribute='address') | list }}"
 firewall_allowed:
   - name: wireguard
     proto: udp

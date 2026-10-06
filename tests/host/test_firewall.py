@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import pytest
 
+from support.inventory import group_for
+
 pytestmark = pytest.mark.host
 
 LIVE = "/etc/nftables.d/secureedge.nft"
@@ -96,5 +98,16 @@ def test_forward_chain_blocks_routing_from_wireguard(root, expected) -> None:
     wg = expected.get("firewall_wireguard_interface", "wg0")
     chain = root("nft list chain inet secureedge forward")
     assert "policy accept;" in chain
-    assert f'iifname "{wg}" ct status dnat accept' in chain
     assert f'iifname "{wg}" drop' in chain
+    # Published container ports are reachable only from listed peers.
+    assert f'iifname "{wg}" ct status dnat accept' not in chain
+
+
+def test_only_the_edge_reaches_published_ports(root, expected, host) -> None:
+    if group_for(host.check_output("hostname")) != "app":
+        pytest.skip("app servers only")
+    chain = root("nft list chain inet secureedge forward")
+    edge = [peer["address"] for peer in expected["wireguard_peers"] if peer["kind"] == "server"
+            and group_for(peer["name"]) == "edge"]
+    assert edge
+    assert f"ct status dnat ip saddr {edge[0]} accept" in chain or         f"ct status dnat ip saddr {{ {', '.join(edge)} }} accept" in chain

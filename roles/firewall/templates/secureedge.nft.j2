@@ -45,10 +45,13 @@ table inet secureedge {
 	}
 
 	# Docker turns IP forwarding on; nothing arriving from WireGuard may be
-	# routed onward except DNAT'd traffic to a published container port.
+	# routed onward, except traffic from firewall_published_from to a port a
+	# container publishes (DNAT'd).
 	chain forward {
 		type filter hook forward priority filter; policy accept;
-		iifname "{{ firewall_wireguard_interface }}" ct status dnat accept
+{% if firewall_published_from | length > 0 %}
+		iifname "{{ firewall_wireguard_interface }}" ct status dnat ip saddr { {{ firewall_published_from | join(', ') }} } accept
+{% endif %}
 		iifname "{{ firewall_wireguard_interface }}" drop
 	}
 }
