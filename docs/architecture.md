@@ -73,6 +73,16 @@ data under `/srv/atlasrisk`. No container publishes a port; services reach
 each other only on the Compose network. See
 [adr/0007-docker-for-app-services.md](adr/0007-docker-for-app-services.md).
 
+## Backups
+
+Every night at 03:00, app01 dumps PostgreSQL (`pg_dump -Fc`), takes a
+consistent copy of Garage's metadata (`garage meta snapshot`), and backs
+both up with Garage's data blocks to a Cloudflare R2 bucket with restic
+(encrypted; 7 daily, 4 weekly, 6 monthly). `playbooks/restore.yml` restores
+a snapshot and moves the current data aside instead of deleting it. See
+[adr/0010-restic-backups-to-r2.md](adr/0010-restic-backups-to-r2.md) and
+[runbooks/restore.md](runbooks/restore.md).
+
 ## Edge proxy
 
 On `edge01`, NGINX serves `secureedge_app.domain` with a Let's Encrypt
@@ -123,5 +133,5 @@ device cannot use the app server as a router.
 ## Decisions
 
 See [adr/](adr/0001-ansible-for-configuration.md). Open choices (VPS provider,
-container runtime, backup and monitoring
+container runtime and monitoring
 tools) are listed in the layout spec and get an ADR when decided.

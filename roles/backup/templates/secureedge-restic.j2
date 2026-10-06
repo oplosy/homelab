@@ -1,0 +1,8 @@
+#!/bin/sh
+# Managed by SecureEdge (role backup). restic with this server's repository
+# and credentials, for example: sudo secureedge-restic snapshots
+set -eu
+set -a
+. /etc/secureedge/backup/restic.env
+set +a
+exec restic "$@"

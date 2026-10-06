@@ -1,0 +1,29 @@
+---
+# Restore AtlasRisk's data services from a backup. The current data is moved
+# aside, never deleted. See docs/runbooks/restore.md.
+#   ansible-playbook playbooks/restore.yml -e restore_snapshot=latest -e restore_confirm=atlasrisk
+- name: Restore AtlasRisk's data services
+  hosts: app
+  become: true
+  tasks:
+    - name: Check the restore request
+      ansible.builtin.assert:
+        that:
+          - restore_confirm | default('') == 'atlasrisk'
+          - restore_snapshot | default('') is match('^(latest|[0-9a-f]{8,64})$')
+        fail_msg: >-
+          Run with -e restore_snapshot=<snapshot id|latest>
+          -e restore_confirm=atlasrisk. See docs/runbooks/restore.md.
+        quiet: true
+
+    - name: Restore the snapshot
+      ansible.builtin.command:
+        argv:
+          - /usr/local/sbin/secureedge-restore
+          - "{{ restore_snapshot }}"
+      register: backup_restore
+      changed_when: true
+
+    - name: Report the restore
+      ansible.builtin.debug:
+        var: backup_restore.stdout_lines

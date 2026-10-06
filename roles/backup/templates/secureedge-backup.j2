@@ -1,0 +1,33 @@
+#!/bin/bash
+# Managed by SecureEdge (role backup). Back up AtlasRisk's data services to
+# the restic repository; run nightly by secureedge-backup.timer.
+set -euo pipefail
+umask 077
+
+state={{ backup_state_dir }}
+meta={{ backup_data_root }}/garage/meta
+compose=(docker compose --project-directory {{ backup_compose_dir }})
+restic=/usr/local/sbin/secureedge-restic
+
+mkdir -p "$state/staging"
+
+# PostgreSQL: a consistent dump from the running server.
+"${compose[@]}" exec -T postgres pg_dump -U {{ backup_postgres_user }} -Fc {{ backup_postgres_db }} \
+  > "$state/staging/{{ backup_postgres_db }}.dump.tmp"
+mv "$state/staging/{{ backup_postgres_db }}.dump.tmp" "$state/staging/{{ backup_postgres_db }}.dump"
+
+# Garage: a consistent copy of the metadata database (VACUUM INTO). Data
+# blocks are content-addressed and never rewritten, so they are copied as is.
+rm -rf "$meta/snapshots"
+"${compose[@]}" exec -T garage /garage meta snapshot >/dev/null
+snapshot=$(find "$meta/snapshots" -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)
+cp "$snapshot/db.sqlite" "$state/staging/garage-meta.sqlite"
+rm -rf "$meta/snapshots"
+
+"$restic" backup --tag atlasrisk \
+  --exclude "$meta/db.sqlite*" --exclude "$meta/snapshots" \
+  "$state/staging" {{ backup_data_root }}/garage
+"$restic" forget --tag atlasrisk --keep-daily {{ backup_keep_daily }} --keep-weekly {{ backup_keep_weekly }} --keep-monthly {{ backup_keep_monthly }} --prune
+"$restic" check
+
+date -u +%Y-%m-%dT%H:%M:%SZ > "$state/last-success"
