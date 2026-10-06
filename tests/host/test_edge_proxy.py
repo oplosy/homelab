@@ -105,18 +105,23 @@ def auth_stub(stubs_allowed, root) -> Iterator[Callable[[], str]]:
 
 
 @pytest.fixture
-def upstream_stub(stubs_allowed, app_root, app) -> Iterator[Callable[[], str]]:
-    # The release's API holds the upstream port: stop it for the stub.
+def app_stopped(stubs_allowed, app_root, app) -> Iterator[None]:
+    """Nothing listens on the upstream port: the release's API is stopped."""
     compose = "docker compose --project-directory /etc/atlasrisk"
     if app.get("release"):
         app_root(f"{compose} stop api")
     try:
-        upstream = app["upstream"]
-        with stub(app_root, "se-upstream-stub", upstream["address"], upstream["port"], 200) as requests:
-            yield requests
+        yield
     finally:
         if app.get("release"):
             app_root(f"{compose} start api")
+
+
+@pytest.fixture
+def upstream_stub(app_stopped, app_root, app) -> Iterator[Callable[[], str]]:
+    upstream = app["upstream"]
+    with stub(app_root, "se-upstream-stub", upstream["address"], upstream["port"], 200) as requests:
+        yield requests
 
 
 @pytest.fixture
@@ -373,7 +378,7 @@ def test_with_auth_requests_reach_the_app_over_wireguard(edge_host, app, auth_st
     assert "/oauth2/auth" in auth_stub()
 
 
-def test_unreachable_app_gives_502(edge_host, app, auth_stub) -> None:
+def test_unreachable_app_gives_502(edge_host, app, auth_stub, app_stopped) -> None:
     domain = app["domain"]
     assert status(edge_host, domain, f"https://{domain}{app['api_prefix']}v1/portfolios") == 502
 
