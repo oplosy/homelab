@@ -87,6 +87,14 @@
 
 # The API publishes its port on the WireGuard address, which must exist
 # before Docker restarts containers at boot.
+- name: Create the Docker unit drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Start Docker after WireGuard
   ansible.builtin.copy:
     dest: /etc/systemd/system/docker.service.d/secureedge-wireguard.conf
