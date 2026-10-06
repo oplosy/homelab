@@ -44,6 +44,7 @@
   loop:
     - /etc/secureedge/backup
     - "{{ backup_state_dir }}"
+    - /var/cache/secureedge-restic
 
 - name: Write the restic repository settings
   ansible.builtin.template:

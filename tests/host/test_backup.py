@@ -18,8 +18,9 @@ def psql(root, sql: str) -> str:
     return root(f'{COMPOSE} exec -T postgres psql -U atrisk -d atrisk -tAc "{sql}"').strip()
 
 
-def snapshot_count(root) -> int:
-    return len(json.loads(root(f"{RESTIC} snapshots --tag atlasrisk --json")))
+def latest_snapshot(root) -> str:
+    snapshots = json.loads(root(f"{RESTIC} snapshots --tag atlasrisk --latest 1 --json"))
+    return snapshots[-1]["id"] if snapshots else ""
 
 
 def test_backup_runs_nightly(app_host, root) -> None:
@@ -36,9 +37,13 @@ def test_repository_settings_are_root_only(app_host, root) -> None:
 
 
 def test_a_backup_run_adds_a_snapshot(app_host, root) -> None:
-    before = snapshot_count(root)
+    # Compare the newest snapshot, not the count: on a real server retention
+    # may remove an older snapshot in the same run.
+    before = latest_snapshot(root)
     root("systemctl start secureedge-backup.service")
-    assert snapshot_count(root) == before + 1
+    after = latest_snapshot(root)
+    assert after
+    assert after != before
     assert root(f"cat {STATE}/last-success").startswith("20")
     # The staged dump and Garage metadata copy stay root-only.
     assert root(f"stat -c '%a' {STATE}/staging/atrisk.dump") == "600"

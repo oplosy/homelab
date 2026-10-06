@@ -44,7 +44,17 @@ cp "$staged/garage-meta.sqlite" "$root/garage/meta/db.sqlite"
 mkdir -p "$root/postgres"
 chmod 0755 "$root/postgres"
 "${compose[@]}" up -d --wait postgres
-"${compose[@]}" exec -T postgres pg_restore -U {{ backup_postgres_user }} -d {{ backup_postgres_db }} --clean --if-exists --no-owner \
+# On first start the entrypoint runs a temporary server on the Unix socket
+# only, which the health check already accepts; wait for the real one.
+for _ in $(seq 120); do
+  if "${compose[@]}" exec -T postgres pg_isready -h 127.0.0.1 -U {{ backup_postgres_user }} -d {{ backup_postgres_db }} >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+"${compose[@]}" exec -T postgres pg_isready -h 127.0.0.1 -U {{ backup_postgres_user }} -d {{ backup_postgres_db }} >/dev/null
+# All or nothing: a failed load leaves an empty database, not half of one.
+"${compose[@]}" exec -T postgres pg_restore -U {{ backup_postgres_user }} -d {{ backup_postgres_db }} --no-owner --exit-on-error --single-transaction \
   < "$staged/{{ backup_postgres_db }}.dump"
 
 "${compose[@]}" up -d --wait
