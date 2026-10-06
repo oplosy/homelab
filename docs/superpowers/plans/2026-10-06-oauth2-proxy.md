@@ -1006,7 +1006,7 @@ In `docs/architecture.md`:
 - Request flow step 3: replace the sentence "Until oauth2-proxy is deployed, nothing answers there and NGINX returns 500 for every application request." with "oauth2-proxy accepts only the GitHub accounts in `secureedge_auth.github_users`; if it is down, NGINX returns 500 for every application request."
 - Add after step 3: "State-changing API requests (POST, PUT, PATCH, DELETE) must come from the site itself (`Origin`, `Sec-Fetch-Site`); others get 403 before the login check."
 - In "Decisions", remove "identity provider" from the open choices.
-- In "Edge proxy", add: "oauth2-proxy runs as a sandboxed service on `127.0.0.1:4180`; identity headers and cookies are stripped before AtlasRisk. See [adr/0009-oauth2-proxy-with-github.md](adr/0009-oauth2-proxy-with-github.md)."
+- In "Edge proxy", add: "oauth2-proxy runs as a sandboxed service on `127.0.0.1:4180`; identity headers and cookies are stripped before AtlasRisk. See `[adr/0009-oauth2-proxy-with-github.md](adr/0009-oauth2-proxy-with-github.md)`."
 
 In `README.md`, add `oauth2_proxy` to the roles list after `tls`.
 
