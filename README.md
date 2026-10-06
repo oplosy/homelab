@@ -91,6 +91,6 @@ To set up real servers, follow [docs/runbooks/setup.md](docs/runbooks/setup.md).
 | `docs/evidence/` | Status of each "done" criterion |
 
 `roles/` holds `base`, `firewall`, `wireguard`, `tls`, `oauth2_proxy`, `edge_proxy`,
-`container_runtime`, `app_service` and `backup`; `playbooks/` holds `site.yml`,
+`container_runtime`, `app_service`, `backup` and `monitoring`; `playbooks/` holds `site.yml`,
 `edge.yml`, `app.yml`, `bootstrap.yml`, `backup.yml` and `restore.yml`; `molecule/default/` is the test
 scenario.
