@@ -1,0 +1,20 @@
+---
+# Take a backup now, for example before a risky change:
+#   ansible-playbook playbooks/backup.yml
+- name: Back up AtlasRisk's data services now
+  hosts: app
+  become: true
+  tasks:
+    - name: Run the backup service
+      ansible.builtin.systemd_service:
+        name: secureedge-backup.service
+        state: started
+
+    - name: Show the newest snapshot
+      ansible.builtin.command: /usr/local/sbin/secureedge-restic snapshots --tag atlasrisk --latest 1 --compact
+      register: backup_latest
+      changed_when: false
+
+    - name: Report the newest snapshot
+      ansible.builtin.debug:
+        var: backup_latest.stdout_lines

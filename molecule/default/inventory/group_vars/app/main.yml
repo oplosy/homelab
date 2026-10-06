@@ -20,3 +20,7 @@ vault_atlasrisk_postgres_password: qcgMvivvw63LCR2y+qxUcgemeTRVVPKkHQUEjz4GBH1AJ
 vault_atlasrisk_garage_access_key: GKcfe3c374687e6e82648563ea
 vault_atlasrisk_garage_secret_key: d1ddef26ea634b4fbe7d6c5915059c011c15b1f212436bf8ab5d75fc7db49c9a
 vault_atlasrisk_garage_rpc_secret: 5888366774c94c3a719b6408cf3fb9f9aa517f64f85ff7c848ab7560eea49aa9
+
+# Molecule backs up to a local restic repository instead of Cloudflare R2.
+backup_repository: /var/backups/secureedge-restic
+vault_backup_restic_password: molecule-only-restic-password-0123456789
