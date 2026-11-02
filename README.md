@@ -5,8 +5,10 @@ HTTPS, an NGINX reverse proxy with ModSecurity and OWASP CRS, OIDC login through
 oauth2-proxy, API rate limits, backups, and monitoring. Scope and goals are in
 [PROJECT.md](PROJECT.md); the design is in [docs/architecture.md](docs/architecture.md).
 
-**Status:** foundation only. No server is configured yet. See
-[docs/evidence/README.md](docs/evidence/README.md) for what works today.
+**Status:** the Ansible roles for every layer above are written, and the
+repository has Molecule and pytest checks for them. Nothing is deployed to real
+VPSs yet, so none of the "done" criteria in [PROJECT.md](PROJECT.md) is met. See
+[docs/evidence/README.md](docs/evidence/README.md) for the status of each one.
 
 ## Prerequisites
 
